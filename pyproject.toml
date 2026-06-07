@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "credential-broker"
+version = "0.1.0"
+description = "Generic user-context credential broker for Windows Credential Manager and service callers."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "mergi72" }]
+dependencies = [
+  "pydantic>=2.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=9.0",
+]
+
+[project.scripts]
+credential-broker = "credential_broker.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = [
+  "unit: unit tests",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/credential_broker"]
