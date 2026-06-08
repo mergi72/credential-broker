@@ -27,12 +27,16 @@ Default endpoint:
 http://127.0.0.1:8776
 ```
 
+The broker is localhost-only by design. It refuses to bind to non-loopback hosts such as `0.0.0.0`, `::`, or LAN IP addresses. Allowed bind hosts are `127.0.0.1`, `localhost`, and `::1`.
+
 Endpoints:
 
 ```text
 GET  /health
-POST /credentials/resolve
+POST /auth/resolve
 ```
+
+`/credentials/resolve` is kept as a temporary compatibility alias for older local callers.
 
 Run the local broker:
 
@@ -52,15 +56,10 @@ Request:
 
 ```json
 {
-  "provider": "alfresco",
   "auth": {
     "mode": "windows",
     "target": "tc-wfx/bridge",
     "required": true
-  },
-  "user": {
-    "domain": "DOMAIN",
-    "name": "user"
   }
 }
 ```
@@ -89,7 +88,7 @@ HTTP resolve:
 
 ```powershell
 Invoke-RestMethod -Method Post `
-  -Uri http://127.0.0.1:8776/credentials/resolve `
+  -Uri http://127.0.0.1:8776/auth/resolve `
   -ContentType application/json `
   -Body '{"auth":{"mode":"windows","target":"tc-wfx/bridge","required":true}}'
 ```

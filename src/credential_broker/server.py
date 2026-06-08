@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
@@ -11,6 +12,36 @@ from credential_broker.models import CredentialRequest
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8776
+AUTH_RESOLVE_PATH = "/auth/resolve"
+LEGACY_CREDENTIALS_RESOLVE_PATH = "/credentials/resolve"
+RESOLVE_PATHS = {AUTH_RESOLVE_PATH, LEGACY_CREDENTIALS_RESOLVE_PATH}
+ALLOWED_HOST_NAMES = {"localhost"}
+
+
+class UnsafeBindHostError(ValueError):
+    pass
+
+
+def validate_bind_host(host: str) -> str:
+    normalized = (host or "").strip()
+    if not normalized:
+        raise UnsafeBindHostError("Credential Broker bind host must not be empty. Use 127.0.0.1, localhost, or ::1.")
+
+    if normalized.lower() in ALLOWED_HOST_NAMES:
+        return normalized
+
+    try:
+        address = ipaddress.ip_address(normalized)
+    except ValueError as exc:
+        raise UnsafeBindHostError(
+            f"Refusing to bind Credential Broker to non-loopback host '{host}'. Use 127.0.0.1, localhost, or ::1."
+        ) from exc
+
+    if not address.is_loopback:
+        raise UnsafeBindHostError(
+            f"Refusing to bind Credential Broker to non-loopback host '{host}'. Use 127.0.0.1, localhost, or ::1."
+        )
+    return normalized
 
 
 def _json_safe(value: Any) -> Any:
@@ -41,30 +72,27 @@ def _normalize_request_payload(payload: Any) -> Any:
         return payload
 
     auth = _pick(payload, "auth", "Auth")
-    user = _pick(payload, "user", "User")
-    normalized: dict[str, Any] = {
-        "provider": _pick(payload, "provider", "Provider"),
-    }
+    normalized: dict[str, Any] = {key: value for key, value in payload.items() if key not in {"auth", "Auth"}}
 
     if isinstance(auth, dict):
-        normalized["auth"] = {
-            "mode": _pick(auth, "mode", "Mode"),
-            "target": _pick(auth, "target", "Target"),
-            "targetBase": _pick(auth, "targetBase", "target_base", "TargetBase"),
-            "required": _pick(auth, "required", "Required"),
+        normalized_auth = {
+            key: value
+            for key, value in auth.items()
+            if key not in {"mode", "Mode", "target", "Target", "targetBase", "target_base", "TargetBase", "required", "Required"}
         }
-        if normalized["auth"]["required"] is None:
-            normalized["auth"]["required"] = True
+        normalized_auth.update(
+            {
+                "mode": _pick(auth, "mode", "Mode"),
+                "target": _pick(auth, "target", "Target"),
+                "targetBase": _pick(auth, "targetBase", "target_base", "TargetBase"),
+                "required": _pick(auth, "required", "Required"),
+            }
+        )
+        if normalized_auth["required"] is None:
+            normalized_auth["required"] = True
+        normalized["auth"] = normalized_auth
     else:
         normalized["auth"] = auth
-
-    if isinstance(user, dict):
-        normalized["user"] = {
-            "domain": _pick(user, "domain", "Domain"),
-            "name": _pick(user, "name", "Name"),
-        }
-    elif user is not None:
-        normalized["user"] = user
 
     return normalized
 
@@ -91,7 +119,7 @@ def resolve_json_request(raw_body: bytes) -> tuple[int, dict[str, Any]]:
 
 
 class CredentialBrokerHandler(BaseHTTPRequestHandler):
-    server_version = "CredentialBroker/0.1"
+    server_version = "CredentialBroker/0.2"
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/health":
@@ -100,7 +128,7 @@ class CredentialBrokerHandler(BaseHTTPRequestHandler):
         self._send_json(404, {"ok": False, "message": "Not found."})
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib handler API
-        if self.path != "/credentials/resolve":
+        if self.path not in RESOLVE_PATHS:
             self._send_json(404, {"ok": False, "message": "Not found."})
             return
 
@@ -125,8 +153,9 @@ class CredentialBrokerHandler(BaseHTTPRequestHandler):
 
 
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
+    host = validate_bind_host(host)
     server = ThreadingHTTPServer((host, port), CredentialBrokerHandler)
     print(f"Credential Broker listening on http://{host}:{port}")
     print(f"Health: http://{host}:{port}/health")
-    print(f"Resolve: POST http://{host}:{port}/credentials/resolve")
+    print(f"Resolve: POST http://{host}:{port}{AUTH_RESOLVE_PATH}")
     server.serve_forever()

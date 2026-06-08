@@ -1,24 +1,21 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AuthRequirement(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     mode: str = Field(description="Requested credential mode, for example windows, credentials, none.")
     target: str | None = Field(default=None, description="Credential target/name in the backing credential store.")
     target_base: str | None = Field(default=None, alias="targetBase")
     required: bool = True
 
 
-class UserContext(BaseModel):
-    domain: str | None = None
-    name: str | None = None
-
-
 class CredentialRequest(BaseModel):
-    provider: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
     auth: AuthRequirement
-    user: UserContext | None = None
 
 
 class AuthContext(BaseModel):
