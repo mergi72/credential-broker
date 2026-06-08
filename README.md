@@ -19,6 +19,33 @@ The broker owns credential resolution. Callers describe what they need, and the 
 - Use small JSON request/response contracts.
 - Stay application-agnostic: no DMS, TC-WFX, or provider-specific assumptions in the core layer.
 
+## Local API
+
+Default endpoint:
+
+```text
+http://127.0.0.1:8776
+```
+
+Endpoints:
+
+```text
+GET  /health
+POST /credentials/resolve
+```
+
+Run the local broker:
+
+```powershell
+credential-broker serve
+```
+
+Or from source:
+
+```powershell
+python -m credential_broker.cli serve
+```
+
 ## Contract
 
 Request:
@@ -46,16 +73,32 @@ Response:
   "auth": {
     "mode": "credentials",
     "username": "user@example.com",
-    "password": "secret"
+    "password": "secret",
+    "credential_id": "tc-wfx/bridge"
   }
 }
+```
+
+CLI resolve:
+
+```powershell
+credential-broker resolve '{"auth":{"mode":"windows","target":"tc-wfx/bridge","required":true}}'
+```
+
+HTTP resolve:
+
+```powershell
+Invoke-RestMethod -Method Post `
+  -Uri http://127.0.0.1:8776/credentials/resolve `
+  -ContentType application/json `
+  -Body '{"auth":{"mode":"windows","target":"tc-wfx/bridge","required":true}}'
 ```
 
 ## Initial Scope
 
 - Windows only.
 - Windows Credential Manager backend.
-- Library and CLI first; HTTP/IPC can be added later.
+- Library, CLI and local HTTP API first; IPC can be added later.
 - No UI login flow in the first version.
 
 ## Development
@@ -66,3 +109,4 @@ python -m venv .venv312
 pip install -e .[dev]
 pytest
 ```
+
