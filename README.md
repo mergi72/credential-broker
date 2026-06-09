@@ -108,4 +108,12 @@ python -m venv .venv312
 pip install -e .[dev]
 pytest
 ```
+## Windows Installer
 
+Build the standalone Windows installer:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-broker-installer.ps1
+```
+
+The installer is per-user. It installs `credential-broker.exe` under `%LOCALAPPDATA%\Credential Broker`, seeds `broker.json` under the application `config` directory, creates `%APPDATA%\Credential Broker\config\broker.local.json` when missing, sets the user environment variables `CREDENTIAL_BROKER_MACHINE_CONFIG_DIR` and `CREDENTIAL_BROKER_USER_CONFIG_DIR`, registers a `CredentialBroker` scheduled task at user logon, and starts the broker immediately.
