@@ -8,6 +8,34 @@ Generic user-context credential broker for applications and services that need c
 
 The broker owns credential resolution. Callers describe what they need, and the broker returns a bridge-compatible auth context.
 
+## Architecture
+
+Credential Broker is intentionally application-agnostic. Callers ask for an auth context; the broker resolves it from a configured credential source.
+
+```text
+Application A
+Application B
+Application C
+        |
+        v
+Credential Broker
+        |
+        v
+Credential Source
+```
+
+Or, abstractly:
+
+```text
+Caller
+  |
+  v
+Broker
+  |
+  v
+Credential Provider
+```
+
 ## Goals
 
 - Run in the interactive user context.
@@ -109,12 +137,19 @@ python -m venv .venv312
 pip install -e .[dev]
 pytest
 ```
+
 ## Windows Installer
 
 Build the standalone Windows installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-broker-installer.ps1
+```
+
+Build the unpacked install ZIP:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\build-broker-install-package.ps1
 ```
 
 The installer is per-user. It installs `credential-broker.exe` under `%LOCALAPPDATA%\Credential Broker`, seeds `broker.json` under the application `config` directory, creates `%APPDATA%\Credential Broker\config\broker.local.json` when missing, sets the user environment variables `CREDENTIAL_BROKER_MACHINE_CONFIG_DIR` and `CREDENTIAL_BROKER_USER_CONFIG_DIR`, registers a `CredentialBroker` scheduled task at user logon, and starts the broker immediately.
