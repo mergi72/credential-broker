@@ -65,3 +65,58 @@ def test_optional_missing_windows_credential_returns_none_auth(monkeypatch: pyte
     assert response.auth is not None
     assert response.auth.mode == "none"
     assert response.message == "missing"
+
+
+def test_unsupported_required_mode_fails() -> None:
+    request = CredentialRequest.model_validate({"auth": {"mode": "vault", "required": True}})
+
+    response = broker_module.resolve_credentials(request)
+
+    assert response.ok is False
+    assert response.auth is None
+    assert response.message == "Unsupported credential mode: vault"
+
+
+def test_unsupported_optional_mode_returns_none_auth() -> None:
+    request = CredentialRequest.model_validate({"auth": {"mode": "vault", "required": False}})
+
+    response = broker_module.resolve_credentials(request)
+
+    assert response.ok is True
+    assert response.auth is not None
+    assert response.auth.mode == "none"
+
+
+def test_resolve_credentials_dispatches_registered_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    called = []
+
+    def resolver(request: CredentialRequest):
+        called.append(request.auth.mode)
+        return broker_module.CredentialResponse(ok=True, auth=broker_module.AuthContext(mode="none"))
+
+    monkeypatch.setitem(broker_module._RESOLVERS, "test-store", resolver)
+    request = CredentialRequest.model_validate({"auth": {"mode": "test-store", "required": True}})
+
+    response = broker_module.resolve_credentials(request)
+
+    assert response.ok is True
+    assert called == ["test-store"]
+
+
+def test_resolve_windows_token_credential_returns_token_auth(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        broker_module,
+        "read_windows_credential",
+        lambda target: WindowsCredential(target=target, username="ignored@example.com", token="token-value"),
+    )
+    request = CredentialRequest.model_validate({"auth": {"mode": "windows", "target": "tc-wfx/bridge", "required": True}})
+
+    response = broker_module.resolve_credentials(request)
+
+    assert response.ok is True
+    assert response.auth is not None
+    assert response.auth.mode == "token"
+    assert response.auth.token == "token-value"
+    assert response.auth.username is None
+    assert response.auth.password is None
+    assert response.auth.credential_id == "tc-wfx/bridge"
