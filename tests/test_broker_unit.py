@@ -16,6 +16,7 @@ def test_resolve_none_mode() -> None:
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source is None
     assert response.auth is not None
     assert response.auth.mode == "none"
 
@@ -31,6 +32,7 @@ def test_resolve_windows_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source == "windows"
     assert response.auth is not None
     assert response.auth.mode == "credentials"
     assert response.auth.username == "user@example.com"
@@ -48,6 +50,7 @@ def test_required_missing_windows_credential_fails(monkeypatch: pytest.MonkeyPat
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is False
+    assert response.source is None
     assert response.auth is None
     assert response.message == "missing"
 
@@ -62,6 +65,7 @@ def test_optional_missing_windows_credential_returns_none_auth(monkeypatch: pyte
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source is None
     assert response.auth is not None
     assert response.auth.mode == "none"
     assert response.message == "missing"
@@ -73,6 +77,7 @@ def test_unsupported_required_mode_fails() -> None:
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is False
+    assert response.source is None
     assert response.auth is None
     assert response.message == "Unsupported credential mode: vault"
 
@@ -83,6 +88,7 @@ def test_unsupported_optional_mode_returns_none_auth() -> None:
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source is None
     assert response.auth is not None
     assert response.auth.mode == "none"
 
@@ -92,7 +98,7 @@ def test_resolve_credentials_dispatches_registered_resolver(monkeypatch: pytest.
 
     def resolver(request: CredentialRequest):
         called.append(request.auth.mode)
-        return broker_module.CredentialResponse(ok=True, auth=broker_module.AuthContext(mode="none"))
+        return broker_module.CredentialResponse(ok=True, source="test-store", auth=broker_module.AuthContext(mode="none"))
 
     monkeypatch.setitem(broker_module._RESOLVERS, "test-store", resolver)
     request = CredentialRequest.model_validate({"auth": {"mode": "test-store", "required": True}})
@@ -100,6 +106,7 @@ def test_resolve_credentials_dispatches_registered_resolver(monkeypatch: pytest.
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source == "test-store"
     assert called == ["test-store"]
 
 
@@ -114,6 +121,7 @@ def test_resolve_windows_token_credential_returns_token_auth(monkeypatch: pytest
     response = broker_module.resolve_credentials(request)
 
     assert response.ok is True
+    assert response.source == "windows"
     assert response.auth is not None
     assert response.auth.mode == "token"
     assert response.auth.token == "token-value"

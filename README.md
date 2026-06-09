@@ -69,6 +69,7 @@ Response:
 ```json
 {
   "ok": true,
+  "source": "windows",
   "auth": {
     "mode": "credentials",
     "username": "user@example.com",

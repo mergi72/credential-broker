@@ -17,6 +17,43 @@ LEGACY_CREDENTIALS_RESOLVE_PATH = "/credentials/resolve"
 RESOLVE_PATHS = {AUTH_RESOLVE_PATH, LEGACY_CREDENTIALS_RESOLVE_PATH}
 ALLOWED_HOST_NAMES = {"localhost"}
 
+SENSITIVE_LOG_KEYS = {"password", "passwd", "secret", "token", "api_key", "apikey", "access_token", "refresh_token"}
+MASKED_LOG_VALUE = "***"
+
+
+def sanitize_request_for_logging(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return sanitize_request_for_logging(value.decode("utf-8", errors="replace"))
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return value
+        return sanitize_request_for_logging(parsed)
+    if isinstance(value, dict):
+        sensitive_error_input = False
+        loc = value.get("loc")
+        if isinstance(loc, (list, tuple)):
+            sensitive_error_input = any(str(part).lower() in SENSITIVE_LOG_KEYS for part in loc)
+
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key)
+            if key_text.lower() in SENSITIVE_LOG_KEYS or (key_text == "input" and sensitive_error_input):
+                sanitized[key_text] = MASKED_LOG_VALUE
+            else:
+                sanitized[key_text] = sanitize_request_for_logging(item)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_request_for_logging(item) for item in value]
+    if isinstance(value, tuple):
+        return [sanitize_request_for_logging(item) for item in value]
+    return value
+
+
+def _format_for_log(value: Any) -> str:
+    return json.dumps(_json_safe(sanitize_request_for_logging(value)), ensure_ascii=False, sort_keys=True)
+
 
 class UnsafeBindHostError(ValueError):
     pass
@@ -101,16 +138,16 @@ def resolve_json_request(raw_body: bytes) -> tuple[int, dict[str, Any]]:
     try:
         raw_payload = json.loads(raw_body.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        print(f"[WARN] invalid json body={raw_body.decode('utf-8', errors='replace')}")
+        print(f"[WARN] invalid json body={_format_for_log(raw_body)}")
         return 400, {"ok": False, "message": f"Invalid JSON request: {exc}"}
 
     payload = _normalize_request_payload(raw_payload)
     try:
         request = CredentialRequest.model_validate(payload)
     except ValidationError as exc:
-        print(f"[WARN] invalid request body={raw_body.decode('utf-8', errors='replace')}")
-        print(f"[WARN] normalized payload={payload}")
-        print(f"[WARN] validation errors={exc.errors()}")
+        print(f"[WARN] invalid request body={_format_for_log(raw_body)}")
+        print(f"[WARN] normalized payload={_format_for_log(payload)}")
+        print(f"[WARN] validation errors={_format_for_log(exc.errors())}")
         return 400, {"ok": False, "message": "Invalid credential request.", "errors": exc.errors()}
 
     response = resolve_credentials(request)
@@ -152,10 +189,20 @@ class CredentialBrokerHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
+def _serve_until_stopped(server: ThreadingHTTPServer) -> None:
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("[INFO] Credential Broker stop requested.")
+    finally:
+        server.server_close()
+        print("[INFO] Credential Broker stopped.")
+
+
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:
     host = validate_bind_host(host)
     server = ThreadingHTTPServer((host, port), CredentialBrokerHandler)
     print(f"Credential Broker listening on http://{host}:{port}")
     print(f"Health: http://{host}:{port}/health")
     print(f"Resolve: POST http://{host}:{port}{AUTH_RESOLVE_PATH}")
-    server.serve_forever()
+    _serve_until_stopped(server)

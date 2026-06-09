@@ -37,7 +37,7 @@ def resolve_windows(request: CredentialRequest) -> CredentialResponse:
     except CredentialBrokerError as exc:
         return CredentialResponse(ok=False, message=str(exc))
 
-    return CredentialResponse(ok=True, auth=_auth_context_from_windows_credential(credential))
+    return CredentialResponse(ok=True, source="windows", auth=_auth_context_from_windows_credential(credential))
 
 
 _RESOLVERS: dict[str, CredentialResolver] = {

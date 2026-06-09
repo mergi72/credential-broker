@@ -50,5 +50,6 @@ class AuthContext(BaseModel):
 
 class CredentialResponse(BaseModel):
     ok: bool
+    source: str | None = None
     auth: AuthContext | None = None
     message: str | None = None

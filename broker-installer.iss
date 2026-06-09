@@ -1,7 +1,7 @@
 [Setup]
 AppId={{7F7C8B5A-11A4-40F2-88F4-0EF88F1DF83B}
 AppName=Credential Broker
-AppVersion=0.2.5-alpha
+AppVersion=0.2.8
 AppPublisher=mergi72
 DefaultDirName={localappdata}\Credential Broker
 DefaultGroupName=Credential Broker
@@ -10,7 +10,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=artifacts\installer
-OutputBaseFilename=CredentialBrokerSetup-v0.2.5-alpha
+OutputBaseFilename=CredentialBrokerSetup-v0.2.8
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
