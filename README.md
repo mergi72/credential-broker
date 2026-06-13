@@ -140,16 +140,21 @@ pytest
 
 ## Windows Installer
 
-Build the standalone Windows installer:
+Build the standalone per-user broker installer:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build-broker-installer.ps1
 ```
 
-Build the unpacked install ZIP:
+The installer installs only Credential Broker. It does not install or configure DMS Provider Bridge, Total Commander, or the WFX plugin.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts\build-broker-install-package.ps1
+Installed files:
+
+```text
+%LOCALAPPDATA%\Credential Broker\credential-broker.exe
+%LOCALAPPDATA%\Credential Broker\config\broker.json
+%LOCALAPPDATA%\Credential Broker\logs\
 ```
 
-The installer is per-user. It installs `credential-broker.exe` under `%LOCALAPPDATA%\Credential Broker`, seeds `broker.json` under the application `config` directory, creates `%APPDATA%\Credential Broker\config\broker.local.json` when missing, sets the user environment variables `CREDENTIAL_BROKER_MACHINE_CONFIG_DIR` and `CREDENTIAL_BROKER_USER_CONFIG_DIR`, registers a `CredentialBroker` scheduled task at user logon, and starts the broker immediately.
+It creates a user Startup shortcut named `Credential Broker` and starts the broker in the interactive user context.
+

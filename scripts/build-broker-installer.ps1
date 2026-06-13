@@ -1,7 +1,6 @@
 param(
-    [string]$Version = "v0.2.12",
-    [string]$BrokerExePath = "dist\credential-broker.exe",
     [string]$InnoCompilerPath,
+    [string]$ExePath,
     [switch]$SkipCompile
 )
 
@@ -29,29 +28,25 @@ function Resolve-IsccPath {
     return $null
 }
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-
-if (-not [System.IO.Path]::IsPathRooted($BrokerExePath)) {
-    $BrokerExePath = Join-Path $repoRoot $BrokerExePath
-}
-
-if (-not (Test-Path $BrokerExePath)) {
-    throw "Broker executable not found: $BrokerExePath. Build it with PyInstaller first."
-}
-
+$scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Resolve-Path (Join-Path $scriptRoot "..")
 $payloadDir = Join-Path $repoRoot "artifacts\broker-installer-payload"
-$configPayloadDir = Join-Path $payloadDir "config"
-if (Test-Path $payloadDir) {
-    Remove-Item -Path $payloadDir -Recurse -Force
+$payloadConfigDir = Join-Path $payloadDir "config"
+
+if ([string]::IsNullOrWhiteSpace($ExePath)) {
+    $ExePath = Join-Path $repoRoot "dist\credential-broker.exe"
 }
 
-New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
-New-Item -ItemType Directory -Path $configPayloadDir -Force | Out-Null
+if (-not (Test-Path $ExePath)) {
+    throw "Broker executable not found: $ExePath"
+}
 
-Copy-Item -Path $BrokerExePath -Destination (Join-Path $payloadDir "credential-broker.exe") -Force
-Copy-Item -Path (Join-Path $repoRoot "scripts\install-broker.ps1") -Destination (Join-Path $payloadDir "install-broker.ps1") -Force
-Copy-Item -Path (Join-Path $repoRoot "scripts\uninstall-broker.ps1") -Destination (Join-Path $payloadDir "uninstall-broker.ps1") -Force
-Copy-Item -Path (Join-Path $repoRoot "config\broker.json") -Destination (Join-Path $configPayloadDir "broker.json") -Force
+New-Item -ItemType Directory -Path $payloadConfigDir -Force | Out-Null
+
+Copy-Item -Path $ExePath -Destination (Join-Path $payloadDir "credential-broker.exe") -Force
+Copy-Item -Path (Join-Path $repoRoot "scripts\start-credential-broker.ps1") -Destination (Join-Path $payloadDir "start-credential-broker.ps1") -Force
+Copy-Item -Path (Join-Path $repoRoot "scripts\stop-credential-broker.ps1") -Destination (Join-Path $payloadDir "stop-credential-broker.ps1") -Force
+Copy-Item -Path (Join-Path $repoRoot "config\broker.json") -Destination (Join-Path $payloadConfigDir "broker.json") -Force
 
 Write-Host "Installer payload prepared: $payloadDir"
 
