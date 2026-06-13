@@ -26,4 +26,6 @@ if ($existing) {
     return
 }
 
-Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
+$shell = New-Object -ComObject WScript.Shell
+$command = '"' + $exePath + '" serve'
+[void]$shell.Run($command, 0, $false)
