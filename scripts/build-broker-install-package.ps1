@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.2.11",
+    [string]$Version = "v0.2.12",
     [string]$BrokerExePath = "dist\credential-broker.exe"
 )
 

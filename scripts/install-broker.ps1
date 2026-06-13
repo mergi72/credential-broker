@@ -146,13 +146,23 @@ Write-InstallLog "[ OK ] $launcherPath"
 Stop-ExistingBrokerProcess -ResolvedExePath $ExePath
 
 Write-InstallLog "[STEP] Registering scheduled task: $TaskName"
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
-$taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
-$taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User "$env:USERDOMAIN\$env:USERNAME"
-$taskPrincipal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType InteractiveToken -RunLevel LeastPrivilege
-$taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DisallowStartIfOnBatteries:$false -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force | Out-Null
-Write-InstallLog "[ OK ] Scheduled task registered: $TaskName"
+try {
+    $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+    $userSid = $identity.User.Value
+    Write-InstallLog "[INFO] Scheduled task user SID: $userSid"
+
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
+    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userSid
+    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $userSid -LogonType InteractiveToken -RunLevel LeastPrivilege
+    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DisallowStartIfOnBatteries:$false -ExecutionTimeLimit (New-TimeSpan -Days 3650)
+    Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction Stop | Out-Null
+    Write-InstallLog "[ OK ] Scheduled task registered: $TaskName"
+}
+catch {
+    Write-InstallLog "[FAIL] Scheduled task registration failed: $($_.Exception.Message)"
+    throw
+}
 
 if ($StartImmediately) {
     Write-InstallLog "[STEP] Starting scheduled task: $TaskName"
