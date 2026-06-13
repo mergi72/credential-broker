@@ -32,7 +32,7 @@ Name: "{group}\Start Credential Broker"; Filename: "powershell.exe"; Parameters:
 Name: "{group}\Credential Broker Logs"; Filename: "{app}\logs"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-broker.ps1"" -InstallRoot ""{app}"" -ExePath ""{app}\credential-broker.exe"" -ConfigSourceDir ""{app}\config"" -TaskName ""CredentialBroker"" -TaskPath ""\"""; Flags: waituntilterminated logoutput
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-broker.ps1"" -InstallRoot ""{app}"" -ExePath ""{app}\credential-broker.exe"" -ConfigSourceDir ""{app}\config"" -TaskName ""CredentialBroker"""; Flags: waituntilterminated logoutput
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-broker.ps1"" -InstallRoot ""{app}"" -TaskName ""CredentialBroker"" -TaskPath ""\"""; Flags: waituntilterminated runhidden; RunOnceId: "CredentialBrokerUninstall"
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-broker.ps1"" -InstallRoot ""{app}"" -TaskName ""CredentialBroker"""; Flags: waituntilterminated runhidden; RunOnceId: "CredentialBrokerUninstall"

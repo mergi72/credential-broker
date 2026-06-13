@@ -96,7 +96,7 @@ function Normalize-TaskPath {
         return "\"
     }
 
-    $normalized = $Path.Trim()
+    $normalized = $Path.Trim().Trim('"')
     if (-not $normalized.StartsWith("\")) {
         $normalized = "\$normalized"
     }
@@ -217,7 +217,7 @@ try {
     Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userSid
-    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $userSid -LogonType InteractiveToken -RunLevel LeastPrivilege
+    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $userSid -LogonType Interactive -RunLevel LeastPrivilege
     $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DisallowStartIfOnBatteries:$false -ExecutionTimeLimit (New-TimeSpan -Days 3650)
     Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction Stop | Out-Null
 
