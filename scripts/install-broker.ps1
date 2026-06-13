@@ -177,7 +177,8 @@ function Register-BrokerScheduledTask {
         [string]$LauncherPath
     )
 
-    $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
+    $quotedLauncherPath = $LauncherPath.Replace('"', '\"')
+    $taskCommand = '\"powershell.exe\" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File \"' + $quotedLauncherPath + '\"'
     Invoke-Schtasks -Arguments @("/Delete", "/TN", $FullName, "/F") -IgnoreFailure | Out-Null
     Invoke-Schtasks -Arguments @(
         "/Create",
