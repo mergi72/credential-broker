@@ -19,10 +19,54 @@ function Write-UninstallLog {
     Write-Host $Message
 }
 
+function Normalize-TaskPath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return "\"
+    }
+
+    $normalized = $Path.Trim().Trim('"')
+    if (-not $normalized.StartsWith("\")) {
+        $normalized = "\$normalized"
+    }
+    if (-not $normalized.EndsWith("\")) {
+        $normalized = "$normalized\"
+    }
+    return $normalized
+}
+
+function Get-BrokerTaskFullName {
+    param(
+        [string]$Name,
+        [string]$Path
+    )
+
+    $normalizedPath = Normalize-TaskPath -Path $Path
+    if ($normalizedPath -eq "\") {
+        return "\$Name"
+    }
+    return "$normalizedPath$Name"
+}
+
+function Invoke-Schtasks {
+    param([string[]]$Arguments)
+
+    Write-UninstallLog "[INFO] schtasks.exe $($Arguments -join ' ')"
+    $output = & schtasks.exe @Arguments 2>&1
+    foreach ($line in @($output)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
+            Write-UninstallLog "[INFO] schtasks: $line"
+        }
+    }
+}
+
+$taskFullName = Get-BrokerTaskFullName -Path $TaskPath -Name $TaskName
+
 Write-UninstallLog "[INFO] Credential Broker uninstall started"
-Write-UninstallLog "[STEP] Stopping scheduled task: $TaskPath$TaskName"
-Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
-Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+Write-UninstallLog "[STEP] Stopping scheduled task: $taskFullName"
+Invoke-Schtasks -Arguments @("/End", "/TN", $taskFullName)
+Invoke-Schtasks -Arguments @("/Delete", "/TN", $taskFullName, "/F")
 Write-UninstallLog "[ OK ] Scheduled task removed if it existed"
 
 $exePath = Join-Path $InstallRoot "credential-broker.exe"

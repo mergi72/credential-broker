@@ -106,28 +106,77 @@ function Normalize-TaskPath {
     return $normalized
 }
 
-function Get-BrokerScheduledTask {
+function Get-BrokerTaskFullName {
     param(
         [string]$Name,
         [string]$Path
     )
 
-    try {
-        return Get-ScheduledTask -TaskPath $Path -TaskName $Name -ErrorAction Stop
+    $normalizedPath = Normalize-TaskPath -Path $Path
+    if ($normalizedPath -eq "\") {
+        return "\$Name"
     }
-    catch {
-        return $null
+    return "$normalizedPath$Name"
+}
+
+function Invoke-Schtasks {
+    param(
+        [string[]]$Arguments,
+        [switch]$IgnoreFailure
+    )
+
+    Write-InstallLog "[INFO] schtasks.exe $($Arguments -join ' ')"
+    $output = & schtasks.exe @Arguments 2>&1
+    $exitCode = $LASTEXITCODE
+    foreach ($line in @($output)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
+            Write-InstallLog "[INFO] schtasks: $line"
+        }
     }
+    if ($exitCode -ne 0 -and -not $IgnoreFailure) {
+        throw "schtasks.exe failed with exit code $exitCode"
+    }
+    return $exitCode
+}
+
+function Test-BrokerScheduledTask {
+    param([string]$FullName)
+
+    $exitCode = Invoke-Schtasks -Arguments @("/Query", "/TN", $FullName) -IgnoreFailure
+    return ($exitCode -eq 0)
 }
 
 function Write-ScheduledTaskCandidates {
     Write-InstallLog "[INFO] Scheduled task candidates matching '*Credential*':"
-    $candidates = Get-ScheduledTask -ErrorAction SilentlyContinue |
-        Where-Object { $_.TaskName -eq "CredentialBroker" -or $_.TaskName -like "*Credential*" }
-
-    foreach ($candidate in @($candidates)) {
-        Write-InstallLog "[INFO] Task candidate: $($candidate.TaskPath)$($candidate.TaskName)"
+    $output = & schtasks.exe /Query /FO LIST 2>&1
+    foreach ($line in @($output)) {
+        $text = [string]$line
+        if ($text -like "*Credential*") {
+            Write-InstallLog "[INFO] Task candidate: $text"
+        }
     }
+}
+
+function Register-BrokerScheduledTask {
+    param(
+        [string]$FullName,
+        [string]$LauncherPath
+    )
+
+    $taskCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$LauncherPath`""
+    Invoke-Schtasks -Arguments @("/Delete", "/TN", $FullName, "/F") -IgnoreFailure | Out-Null
+    Invoke-Schtasks -Arguments @(
+        "/Create",
+        "/TN",
+        $FullName,
+        "/TR",
+        $taskCommand,
+        "/SC",
+        "ONLOGON",
+        "/RL",
+        "LIMITED",
+        "/F"
+    ) | Out-Null
 }
 
 function Start-BrokerLauncher {
@@ -208,26 +257,21 @@ Write-InstallLog "[ OK ] $launcherPath"
 
 Stop-ExistingBrokerProcess -ResolvedExePath $ExePath
 
-Write-InstallLog "[STEP] Registering scheduled task: $TaskPath$TaskName"
+$taskFullName = Get-BrokerTaskFullName -Path $TaskPath -Name $TaskName
+
+Write-InstallLog "[STEP] Registering scheduled task: $taskFullName"
 try {
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $userSid = $identity.User.Value
     Write-InstallLog "[INFO] Scheduled task user SID: $userSid"
 
-    Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
-    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
-    $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userSid
-    $taskPrincipal = New-ScheduledTaskPrincipal -UserId $userSid -LogonType Interactive -RunLevel Limited
-    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DisallowStartIfOnBatteries:$false -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-    Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction Stop | Out-Null
-
-    $registeredTask = Get-BrokerScheduledTask -Path $TaskPath -Name $TaskName
-    if ($null -eq $registeredTask) {
-        Write-InstallLog "[WARN] Scheduled task was registered without error but cannot be found: $TaskPath$TaskName"
+    Register-BrokerScheduledTask -FullName $taskFullName -LauncherPath $launcherPath
+    if (-not (Test-BrokerScheduledTask -FullName $taskFullName)) {
+        Write-InstallLog "[WARN] Scheduled task was registered without error but cannot be found: $taskFullName"
         Write-ScheduledTaskCandidates
     }
     else {
-        Write-InstallLog "[ OK ] Scheduled task registered and verified: $($registeredTask.TaskPath)$($registeredTask.TaskName)"
+        Write-InstallLog "[ OK ] Scheduled task registered and verified: $taskFullName"
     }
 }
 catch {
@@ -236,15 +280,20 @@ catch {
 }
 
 if ($StartImmediately) {
-    $registeredTask = Get-BrokerScheduledTask -Path $TaskPath -Name $TaskName
-    if ($null -eq $registeredTask) {
-        Write-InstallLog "[WARN] Scheduled task not available for start, using launcher fallback: $TaskPath$TaskName"
+    if (-not (Test-BrokerScheduledTask -FullName $taskFullName)) {
+        Write-InstallLog "[WARN] Scheduled task not available for start, using launcher fallback: $taskFullName"
         Start-BrokerLauncher -Path $launcherPath
     }
     else {
-        Write-InstallLog "[STEP] Starting scheduled task: $($registeredTask.TaskPath)$($registeredTask.TaskName)"
-        Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
-        Write-InstallLog "[ OK ] Scheduled task start requested"
+        Write-InstallLog "[STEP] Starting scheduled task: $taskFullName"
+        $runExitCode = Invoke-Schtasks -Arguments @("/Run", "/TN", $taskFullName) -IgnoreFailure
+        if ($runExitCode -ne 0) {
+            Write-InstallLog "[WARN] Scheduled task start failed, using launcher fallback: $taskFullName"
+            Start-BrokerLauncher -Path $launcherPath
+        }
+        else {
+            Write-InstallLog "[ OK ] Scheduled task start requested"
+        }
     }
     Wait-Health -Url "http://127.0.0.1:8776/health"
 }
