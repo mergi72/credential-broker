@@ -1,6 +1,7 @@
 param(
     [string]$InstallRoot = "$env:LOCALAPPDATA\Credential Broker",
     [string]$TaskName = "CredentialBroker",
+    [string]$TaskPath = "\",
     [switch]$RemoveUserConfig
 )
 
@@ -19,9 +20,9 @@ function Write-UninstallLog {
 }
 
 Write-UninstallLog "[INFO] Credential Broker uninstall started"
-Write-UninstallLog "[STEP] Stopping scheduled task: $TaskName"
-Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+Write-UninstallLog "[STEP] Stopping scheduled task: $TaskPath$TaskName"
+Stop-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -ErrorAction SilentlyContinue | Out-Null
+Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
 Write-UninstallLog "[ OK ] Scheduled task removed if it existed"
 
 $exePath = Join-Path $InstallRoot "credential-broker.exe"

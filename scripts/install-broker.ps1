@@ -3,6 +3,7 @@ param(
     [string]$ExePath,
     [string]$ConfigSourceDir,
     [string]$TaskName = "CredentialBroker",
+    [string]$TaskPath = "\",
     [switch]$StartImmediately
 )
 
@@ -88,7 +89,69 @@ function Wait-Health {
     throw "Credential Broker health check failed: $Url"
 }
 
+function Normalize-TaskPath {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        return "\"
+    }
+
+    $normalized = $Path.Trim()
+    if (-not $normalized.StartsWith("\")) {
+        $normalized = "\$normalized"
+    }
+    if (-not $normalized.EndsWith("\")) {
+        $normalized = "$normalized\"
+    }
+    return $normalized
+}
+
+function Get-BrokerScheduledTask {
+    param(
+        [string]$Name,
+        [string]$Path
+    )
+
+    try {
+        return Get-ScheduledTask -TaskPath $Path -TaskName $Name -ErrorAction Stop
+    }
+    catch {
+        return $null
+    }
+}
+
+function Write-ScheduledTaskCandidates {
+    Write-InstallLog "[INFO] Scheduled task candidates matching '*Credential*':"
+    $candidates = Get-ScheduledTask -ErrorAction SilentlyContinue |
+        Where-Object { $_.TaskName -eq "CredentialBroker" -or $_.TaskName -like "*Credential*" }
+
+    foreach ($candidate in @($candidates)) {
+        Write-InstallLog "[INFO] Task candidate: $($candidate.TaskPath)$($candidate.TaskName)"
+    }
+}
+
+function Start-BrokerLauncher {
+    param([string]$Path)
+
+    if (-not (Test-Path $Path)) {
+        throw "Credential Broker launcher not found: $Path"
+    }
+
+    Write-InstallLog "[STEP] Starting broker launcher: $Path"
+    Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-WindowStyle",
+        "Hidden",
+        "-File",
+        $Path
+    ) -WindowStyle Hidden | Out-Null
+    Write-InstallLog "[ OK ] Broker launcher start requested"
+}
+
 $InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
+$TaskPath = Normalize-TaskPath -Path $TaskPath
 $appConfigRoot = Join-Path $InstallRoot "config"
 $logRoot = Join-Path $InstallRoot "logs"
 $userConfigRoot = Join-Path $env:APPDATA "Credential Broker\config"
@@ -145,29 +208,44 @@ Write-InstallLog "[ OK ] $launcherPath"
 
 Stop-ExistingBrokerProcess -ResolvedExePath $ExePath
 
-Write-InstallLog "[STEP] Registering scheduled task: $TaskName"
+Write-InstallLog "[STEP] Registering scheduled task: $TaskPath$TaskName"
 try {
     $identity = [System.Security.Principal.WindowsIdentity]::GetCurrent()
     $userSid = $identity.User.Value
     Write-InstallLog "[INFO] Scheduled task user SID: $userSid"
 
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
+    Unregister-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue | Out-Null
     $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$launcherPath`""
     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $userSid
     $taskPrincipal = New-ScheduledTaskPrincipal -UserId $userSid -LogonType InteractiveToken -RunLevel LeastPrivilege
     $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DisallowStartIfOnBatteries:$false -ExecutionTimeLimit (New-TimeSpan -Days 3650)
-    Register-ScheduledTask -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction Stop | Out-Null
-    Write-InstallLog "[ OK ] Scheduled task registered: $TaskName"
+    Register-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction Stop | Out-Null
+
+    $registeredTask = Get-BrokerScheduledTask -Path $TaskPath -Name $TaskName
+    if ($null -eq $registeredTask) {
+        Write-InstallLog "[WARN] Scheduled task was registered without error but cannot be found: $TaskPath$TaskName"
+        Write-ScheduledTaskCandidates
+    }
+    else {
+        Write-InstallLog "[ OK ] Scheduled task registered and verified: $($registeredTask.TaskPath)$($registeredTask.TaskName)"
+    }
 }
 catch {
-    Write-InstallLog "[FAIL] Scheduled task registration failed: $($_.Exception.Message)"
-    throw
+    Write-InstallLog "[WARN] Scheduled task registration failed: $($_.Exception.Message)"
+    Write-ScheduledTaskCandidates
 }
 
 if ($StartImmediately) {
-    Write-InstallLog "[STEP] Starting scheduled task: $TaskName"
-    Start-ScheduledTask -TaskName $TaskName
-    Write-InstallLog "[ OK ] Scheduled task started"
+    $registeredTask = Get-BrokerScheduledTask -Path $TaskPath -Name $TaskName
+    if ($null -eq $registeredTask) {
+        Write-InstallLog "[WARN] Scheduled task not available for start, using launcher fallback: $TaskPath$TaskName"
+        Start-BrokerLauncher -Path $launcherPath
+    }
+    else {
+        Write-InstallLog "[STEP] Starting scheduled task: $($registeredTask.TaskPath)$($registeredTask.TaskName)"
+        Start-ScheduledTask -TaskPath $TaskPath -TaskName $TaskName
+        Write-InstallLog "[ OK ] Scheduled task start requested"
+    }
     Wait-Health -Url "http://127.0.0.1:8776/health"
 }
 
