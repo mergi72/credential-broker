@@ -5,8 +5,6 @@ $exePath = Join-Path $installRoot "credential-broker.exe"
 $machineConfigDir = Join-Path $installRoot "config"
 $userConfigDir = Join-Path $env:APPDATA "Credential Broker\config"
 $logDir = Join-Path $installRoot "logs"
-$stdoutLog = Join-Path $logDir "broker-stdout.log"
-$stderrLog = Join-Path $logDir "broker-stderr.log"
 
 if (-not (Test-Path $exePath)) {
     throw "Credential Broker executable not found: $exePath"
@@ -28,4 +26,4 @@ if ($existing) {
     return
 }
 
-Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden -RedirectStandardOutput $stdoutLog -RedirectStandardError $stderrLog | Out-Null
+Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
