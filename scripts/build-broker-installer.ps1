@@ -41,9 +41,16 @@ if (-not (Test-Path $ExePath)) {
     throw "Broker executable not found: $ExePath"
 }
 
+if (Test-Path $payloadDir) {
+    Remove-Item -Path $payloadDir -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $payloadDir -Force | Out-Null
 New-Item -ItemType Directory -Path $payloadConfigDir -Force | Out-Null
 
 Copy-Item -Path $ExePath -Destination (Join-Path $payloadDir "credential-broker.exe") -Force
+Copy-Item -Path (Join-Path $repoRoot "scripts\install-broker.ps1") -Destination (Join-Path $payloadDir "install-broker.ps1") -Force
+Copy-Item -Path (Join-Path $repoRoot "scripts\uninstall-broker.ps1") -Destination (Join-Path $payloadDir "uninstall-broker.ps1") -Force
 Copy-Item -Path (Join-Path $repoRoot "scripts\start-credential-broker.ps1") -Destination (Join-Path $payloadDir "start-credential-broker.ps1") -Force
 Copy-Item -Path (Join-Path $repoRoot "scripts\stop-credential-broker.ps1") -Destination (Join-Path $payloadDir "stop-credential-broker.ps1") -Force
 Copy-Item -Path (Join-Path $repoRoot "config\broker.json") -Destination (Join-Path $payloadConfigDir "broker.json") -Force
