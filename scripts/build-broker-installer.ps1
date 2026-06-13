@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "v0.2.9",
+    [string]$Version = "v0.2.10",
     [string]$BrokerExePath = "dist\credential-broker.exe",
     [string]$InnoCompilerPath,
     [switch]$SkipCompile

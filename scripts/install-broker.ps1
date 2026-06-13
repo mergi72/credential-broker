@@ -29,11 +29,20 @@ function Copy-Checked {
         [switch]$PreserveExisting
     )
     Write-InstallLog "[STEP] Copying file: $Source -> $Target"
+    $resolvedSource = (Resolve-Path $Source).Path
+    $resolvedTarget = $null
+    if (Test-Path $Target) {
+        $resolvedTarget = (Resolve-Path $Target).Path
+    }
+    if (-not [string]::IsNullOrWhiteSpace($resolvedTarget) -and $resolvedSource -ieq $resolvedTarget) {
+        Write-InstallLog "[ OK ] Source already in target location: $Target"
+        return
+    }
     if ($PreserveExisting -and (Test-Path $Target)) {
         Write-InstallLog "[ OK ] Existing file preserved: $Target"
         return
     }
-    Copy-Item -Path $Source -Destination $Target -Force
+    Copy-Item -Path $resolvedSource -Destination $Target -Force
     if (-not (Test-Path $Target)) { throw "File was not copied: $Target" }
     Write-InstallLog "[ OK ] $Target"
 }
