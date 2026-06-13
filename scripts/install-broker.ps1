@@ -126,8 +126,15 @@ function Invoke-Schtasks {
     )
 
     Write-InstallLog "[INFO] schtasks.exe $($Arguments -join ' ')"
-    $output = & schtasks.exe @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & schtasks.exe @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     foreach ($line in @($output)) {
         if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
             Write-InstallLog "[INFO] schtasks: $line"
@@ -148,7 +155,14 @@ function Test-BrokerScheduledTask {
 
 function Write-ScheduledTaskCandidates {
     Write-InstallLog "[INFO] Scheduled task candidates matching '*Credential*':"
-    $output = & schtasks.exe /Query /FO LIST 2>&1
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & schtasks.exe /Query /FO LIST 2>&1
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     foreach ($line in @($output)) {
         $text = [string]$line
         if ($text -like "*Credential*") {

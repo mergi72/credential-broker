@@ -53,7 +53,14 @@ function Invoke-Schtasks {
     param([string[]]$Arguments)
 
     Write-UninstallLog "[INFO] schtasks.exe $($Arguments -join ' ')"
-    $output = & schtasks.exe @Arguments 2>&1
+    $previousErrorActionPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & schtasks.exe @Arguments 2>&1
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
     foreach ($line in @($output)) {
         if (-not [string]::IsNullOrWhiteSpace([string]$line)) {
             Write-UninstallLog "[INFO] schtasks: $line"
