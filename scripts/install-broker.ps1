@@ -139,17 +139,6 @@ function Invoke-ExternalProcess {
     return $process.ExitCode
 }
 
-function Test-IsAdmin {
-    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-function New-QuotedPowerShellString {
-    param([string]$Value)
-    return "'" + ($Value -replace "'", "''") + "'"
-}
-
 function Register-CredentialBrokerTask {
     param(
         [string]$TaskName,
@@ -158,119 +147,74 @@ function Register-CredentialBrokerTask {
         [string]$InstallUserSid
     )
 
-    $taskCommand = "`"$BrokerExePath`" serve"
-    if (Test-IsAdmin) {
-        $exitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
-            "/Create",
-            "/TN", $TaskName,
-            "/TR", $taskCommand,
-            "/SC", "ONLOGON",
-            "/RU", $InstallUser,
-            "/RL", "LIMITED",
-            "/F"
-        )
-
-        if ($exitCode -ne 0) {
-            throw "Credential Broker scheduled task registration failed: $TaskName"
-        }
-        $queryExitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
-            "/Query",
-            "/TN", $TaskName,
-            "/V",
-            "/FO", "LIST"
-        )
-        if ($queryExitCode -ne 0) {
-            throw "Credential Broker scheduled task verification failed: $TaskName"
-        }
-        return
-    }
-
-    Write-Info "Admin elevation is required to register scheduled task."
-    $taskScriptPath = Join-Path $installRoot "register-credential-broker-task.ps1"
     $taskLogPath = Join-Path $logDir "task-registration.log"
-    $taskNameLiteral = New-QuotedPowerShellString -Value ($TaskName.TrimStart("\"))
-    $brokerExePathLiteral = New-QuotedPowerShellString -Value $BrokerExePath
-    $logDirLiteral = New-QuotedPowerShellString -Value $logDir
-    $installUserLiteral = New-QuotedPowerShellString -Value $InstallUser
-    $installUserSidLiteral = New-QuotedPowerShellString -Value $InstallUserSid
+    function Write-TaskRegistrationLog {
+        param([string]$Message)
 
-    $taskScript = @(
-        '$ErrorActionPreference = "Stop"',
-        '$logDir = ' + $logDirLiteral,
-        '$logPath = Join-Path $logDir "task-registration.log"',
-        'New-Item -ItemType Directory -Path $logDir -Force | Out-Null',
-        'function Write-TaskLog {',
-        '    param([string]$Message)',
-        '    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message',
-        '    Add-Content -Path $logPath -Value $line -Encoding UTF8',
-        '}',
-        'function Quote-TaskArgument {',
-        '    param([string]$Value)',
-        '    if ($Value -match ''[\s"]'') { return ''"'' + ($Value -replace ''"'', ''\"'') + ''"'' }',
-        '    return $Value',
-        '}',
-        'function Invoke-LoggedProcess {',
-        '    param([string]$FilePath, [string[]]$Arguments)',
-        '    $argumentLine = ($Arguments | ForEach-Object { Quote-TaskArgument $_ }) -join " "',
-        '    Write-TaskLog "$FilePath $argumentLine"',
-        '    $startInfo = New-Object System.Diagnostics.ProcessStartInfo',
-        '    $startInfo.FileName = $FilePath',
-        '    $startInfo.Arguments = $argumentLine',
-        '    $startInfo.UseShellExecute = $false',
-        '    $startInfo.RedirectStandardOutput = $true',
-        '    $startInfo.RedirectStandardError = $true',
-        '    $startInfo.CreateNoWindow = $true',
-        '    $process = [System.Diagnostics.Process]::Start($startInfo)',
-        '    $stdout = $process.StandardOutput.ReadToEnd()',
-        '    $stderr = $process.StandardError.ReadToEnd()',
-        '    $process.WaitForExit()',
-        '    if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout.TrimEnd() -split "`r?`n" | ForEach-Object { Write-TaskLog $_ } }',
-        '    if (-not [string]::IsNullOrWhiteSpace($stderr)) { $stderr.TrimEnd() -split "`r?`n" | ForEach-Object { Write-TaskLog $_ } }',
-        '    Write-TaskLog "ExitCode=$($process.ExitCode)"',
-        '    return $process.ExitCode',
-        '}',
-        'Write-TaskLog "Starting elevated task registration."',
-        'Write-TaskLog "USERNAME=$env:USERNAME"',
-        'Write-TaskLog "USERDOMAIN=$env:USERDOMAIN"',
-        'Write-TaskLog "LOCALAPPDATA=$env:LOCALAPPDATA"',
-        '$taskName = ' + $taskNameLiteral,
-        '$installUser = ' + $installUserLiteral,
-        '$installUserSid = ' + $installUserSidLiteral,
-        '$exePath = ' + $brokerExePathLiteral,
-        '$taskCommand = "`"$exePath`" serve"',
-        'Write-TaskLog "TaskName=$taskName"',
-        'Write-TaskLog "TargetInstallUser=$installUser"',
-        'Write-TaskLog "TargetInstallUserSid=$installUserSid"',
-        'Write-TaskLog "ExePath=$exePath"',
-        'Write-TaskLog "TaskCommand=$taskCommand"',
-        '$createExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Create", "/TN", $taskName, "/TR", $taskCommand, "/SC", "ONLOGON", "/RU", $installUser, "/RL", "LIMITED", "/F")',
-        'if ($createExitCode -ne 0) { exit $createExitCode }',
-        '$queryExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Query", "/TN", $taskName, "/V", "/FO", "LIST")',
-        'if ($queryExitCode -ne 0) { exit $queryExitCode }',
-        'Write-TaskLog "Scheduled task registration verified."'
-    )
-    Set-Content -Path $taskScriptPath -Value $taskScript -Encoding Unicode
-
-    Write-Info "Starting elevated task registration: $taskScriptPath"
-    $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
-        "-NoProfile",
-        "-ExecutionPolicy", "Bypass",
-        "-File", $taskScriptPath
-    ) -Verb RunAs -Wait -PassThru
+        $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message
+        Add-Content -Path $taskLogPath -Value $line -Encoding UTF8
+        Write-Info "task-registration: $Message"
+    }
 
     if (Test-Path $taskLogPath) {
-        Write-Info "Task registration log: $taskLogPath"
-        Get-Content -Path $taskLogPath -ErrorAction SilentlyContinue | ForEach-Object {
-            Write-Info "task-registration: $_"
-        }
-    }
-    else {
-        Write-Info "Task registration log was not created: $taskLogPath"
+        Remove-Item -Path $taskLogPath -Force
     }
 
-    if ($process.ExitCode -ne 0) {
-        throw "Credential Broker elevated scheduled task registration failed with exit code $($process.ExitCode): $TaskName"
+    Write-TaskRegistrationLog "Starting user-context task registration."
+    Write-TaskRegistrationLog "TaskName=$TaskName"
+    Write-TaskRegistrationLog "InstallUser=$InstallUser"
+    Write-TaskRegistrationLog "InstallUserSid=$InstallUserSid"
+    Write-TaskRegistrationLog "BrokerExePath=$BrokerExePath"
+
+    $service = New-Object -ComObject "Schedule.Service"
+    $service.Connect()
+    $rootFolder = $service.GetFolder("\")
+    $taskDefinition = $service.NewTask(0)
+
+    $taskDefinition.RegistrationInfo.Author = $InstallUser
+    $taskDefinition.RegistrationInfo.Description = "Starts Credential Broker for the current user."
+
+    $trigger = $taskDefinition.Triggers.Create(9)
+    $trigger.Enabled = $true
+    $trigger.UserId = $InstallUser
+
+    $taskDefinition.Principal.UserId = $InstallUserSid
+    $taskDefinition.Principal.LogonType = 3
+    $taskDefinition.Principal.RunLevel = 0
+
+    $taskDefinition.Settings.MultipleInstances = 2
+    $taskDefinition.Settings.DisallowStartIfOnBatteries = $true
+    $taskDefinition.Settings.StopIfGoingOnBatteries = $true
+    $taskDefinition.Settings.AllowHardTerminate = $true
+    $taskDefinition.Settings.StartWhenAvailable = $false
+    $taskDefinition.Settings.RunOnlyIfNetworkAvailable = $false
+    $taskDefinition.Settings.AllowStartOnDemand = $true
+    $taskDefinition.Settings.Enabled = $true
+    $taskDefinition.Settings.Hidden = $false
+    $taskDefinition.Settings.RunOnlyIfIdle = $false
+    $taskDefinition.Settings.WakeToRun = $false
+    $taskDefinition.Settings.ExecutionTimeLimit = "PT72H"
+    $taskDefinition.Settings.Priority = 7
+    $taskDefinition.Settings.IdleSettings.StopOnIdleEnd = $true
+    $taskDefinition.Settings.IdleSettings.RestartOnIdle = $false
+
+    $action = $taskDefinition.Actions.Create(0)
+    $action.Path = "`"$BrokerExePath`""
+    $action.Arguments = "serve"
+
+    [void]$rootFolder.RegisterTaskDefinition($TaskName, $taskDefinition, 6, $null, $null, 3, $null)
+    Write-TaskRegistrationLog "COM task registration completed."
+
+    $queryExitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
+        "/Query",
+        "/TN", $TaskName,
+        "/V",
+        "/FO", "LIST"
+    )
+    if ($queryExitCode -ne 0) {
+        throw "Credential Broker scheduled task verification failed: $TaskName"
     }
+    Write-TaskRegistrationLog "Scheduled task registration verified."
 }
 
 trap {
