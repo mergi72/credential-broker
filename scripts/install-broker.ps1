@@ -1,5 +1,7 @@
 param(
-    [string]$InstallRoot = "$env:LOCALAPPDATA\Credential Broker"
+    [string]$InstallRoot = "$env:LOCALAPPDATA\Credential Broker",
+    [string]$HealthUrl = "http://127.0.0.1:8776/health",
+    [int]$HealthTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +29,32 @@ function Write-Step {
 function Write-Ok {
     param([string]$Message)
     Write-InstallLog -Level "OK" -Message $Message
+}
+
+function Wait-BrokerHealth {
+    param(
+        [string]$Url,
+        [int]$TimeoutSeconds
+    )
+
+    Write-Step "Waiting for Credential Broker health..."
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        try {
+            $response = Invoke-RestMethod -Method Get -Uri $Url -TimeoutSec 5
+            if ($response.ok -eq $true -or $response.status -eq "ok" -or $response.service) {
+                Write-Ok "GET $Url"
+                return
+            }
+        }
+        catch {
+            # Broker can still be starting.
+        }
+
+        Start-Sleep -Seconds 1
+    }
+
+    throw "Credential Broker health check did not pass within $TimeoutSeconds s: $Url"
 }
 
 $installRoot = (Resolve-Path $InstallRoot).Path
@@ -68,8 +96,18 @@ $shortcut.Save()
 Write-Ok $shortcutPath
 
 Write-Step "Starting Credential Broker..."
-& $startScript
-Write-Ok "Credential Broker start requested."
+$existing = Get-CimInstance Win32_Process -Filter "name = 'credential-broker.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.ExecutablePath -ieq $exePath }
+
+if ($existing) {
+    Write-Ok "Credential Broker already running."
+}
+else {
+    Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
+    Write-Ok "Credential Broker start requested."
+}
+
+Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
 
 Write-Info "Install root: $installRoot"
 Write-Info "Machine config: $machineConfigDir"
