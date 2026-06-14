@@ -96,18 +96,24 @@ $shortcut.Save()
 Write-Ok $shortcutPath
 
 Write-Step "Starting Credential Broker..."
-$existing = Get-CimInstance Win32_Process -Filter "name = 'credential-broker.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.ExecutablePath -ieq $exePath }
-
-if ($existing) {
-    Write-Ok "Credential Broker already running."
+try {
+    Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds 3
+    Write-Ok "Credential Broker already healthy."
 }
-else {
-    Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
-    Write-Ok "Credential Broker start requested."
-}
+catch {
+    $existing = Get-CimInstance Win32_Process -Filter "name = 'credential-broker.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.ExecutablePath -ieq $exePath }
 
-Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
+    if ($existing) {
+        Write-Ok "Credential Broker already running."
+    }
+    else {
+        Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
+        Write-Ok "Credential Broker start requested."
+    }
+
+    Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
+}
 
 Write-Info "Install root: $installRoot"
 Write-Info "Machine config: $machineConfigDir"
