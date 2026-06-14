@@ -52,15 +52,6 @@ function Write-ErrorLog {
     Write-InstallLog -Level "ERROR" -Message $Message
 }
 
-function Wait-InstallConfirmation {
-    param([string]$Message)
-
-    Write-Host ""
-    Write-Host $Message -ForegroundColor Yellow
-    Write-Host "Press Enter to continue..."
-    [void](Read-Host)
-}
-
 function Invoke-InstallOperation {
     param(
         [string]$Name,
@@ -68,10 +59,8 @@ function Invoke-InstallOperation {
     )
 
     Write-Step $Name
-    Wait-InstallConfirmation "Before: $Name"
     & $Action
     Write-Ok $Name
-    Wait-InstallConfirmation "After: $Name"
 }
 
 function Wait-BrokerHealth {
@@ -176,6 +165,15 @@ function Register-CredentialBrokerTask {
         if ($exitCode -ne 0) {
             throw "Credential Broker scheduled task registration failed: $TaskName"
         }
+        $queryExitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
+            "/Query",
+            "/TN", $TaskName,
+            "/V",
+            "/FO", "LIST"
+        )
+        if ($queryExitCode -ne 0) {
+            throw "Credential Broker scheduled task verification failed: $TaskName"
+        }
         return
     }
 
@@ -185,11 +183,54 @@ function Register-CredentialBrokerTask {
 
     $taskScript = @(
         '$ErrorActionPreference = "Stop"',
+        '$logDir = Join-Path $env:LOCALAPPDATA "Credential Broker\logs"',
+        '$logPath = Join-Path $logDir "task-registration.log"',
+        'New-Item -ItemType Directory -Path $logDir -Force | Out-Null',
+        'function Write-TaskLog {',
+        '    param([string]$Message)',
+        '    $line = "[{0}] {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Message',
+        '    Add-Content -Path $logPath -Value $line -Encoding UTF8',
+        '}',
+        'function Quote-TaskArgument {',
+        '    param([string]$Value)',
+        '    if ($Value -match ''[\s"]'') { return ''"'' + ($Value -replace ''"'', ''\"'') + ''"'' }',
+        '    return $Value',
+        '}',
+        'function Invoke-LoggedProcess {',
+        '    param([string]$FilePath, [string[]]$Arguments)',
+        '    $argumentLine = ($Arguments | ForEach-Object { Quote-TaskArgument $_ }) -join " "',
+        '    Write-TaskLog "$FilePath $argumentLine"',
+        '    $startInfo = New-Object System.Diagnostics.ProcessStartInfo',
+        '    $startInfo.FileName = $FilePath',
+        '    $startInfo.Arguments = $argumentLine',
+        '    $startInfo.UseShellExecute = $false',
+        '    $startInfo.RedirectStandardOutput = $true',
+        '    $startInfo.RedirectStandardError = $true',
+        '    $startInfo.CreateNoWindow = $true',
+        '    $process = [System.Diagnostics.Process]::Start($startInfo)',
+        '    $stdout = $process.StandardOutput.ReadToEnd()',
+        '    $stderr = $process.StandardError.ReadToEnd()',
+        '    $process.WaitForExit()',
+        '    if (-not [string]::IsNullOrWhiteSpace($stdout)) { $stdout.TrimEnd() -split "`r?`n" | ForEach-Object { Write-TaskLog $_ } }',
+        '    if (-not [string]::IsNullOrWhiteSpace($stderr)) { $stderr.TrimEnd() -split "`r?`n" | ForEach-Object { Write-TaskLog $_ } }',
+        '    Write-TaskLog "ExitCode=$($process.ExitCode)"',
+        '    return $process.ExitCode',
+        '}',
+        'Write-TaskLog "Starting elevated task registration."',
+        'Write-TaskLog "USERNAME=$env:USERNAME"',
+        'Write-TaskLog "USERDOMAIN=$env:USERDOMAIN"',
+        'Write-TaskLog "LOCALAPPDATA=$env:LOCALAPPDATA"',
         '$taskName = ' + $taskNameLiteral,
         '$exePath = Join-Path $env:LOCALAPPDATA "Credential Broker\credential-broker.exe"',
         '$taskCommand = "`"$exePath`" serve"',
-        'schtasks.exe /Create /TN $taskName /TR $taskCommand /SC ONLOGON /RL LIMITED /F',
-        'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+        'Write-TaskLog "TaskName=$taskName"',
+        'Write-TaskLog "ExePath=$exePath"',
+        'Write-TaskLog "TaskCommand=$taskCommand"',
+        '$createExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Create", "/TN", $taskName, "/TR", $taskCommand, "/SC", "ONLOGON", "/RL", "LIMITED", "/F")',
+        'if ($createExitCode -ne 0) { exit $createExitCode }',
+        '$queryExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Query", "/TN", $taskName, "/V", "/FO", "LIST")',
+        'if ($queryExitCode -ne 0) { exit $queryExitCode }',
+        'Write-TaskLog "Scheduled task registration verified."'
     )
     Set-Content -Path $taskScriptPath -Value $taskScript -Encoding UTF8
 
@@ -214,7 +255,6 @@ trap {
 }
 
 Write-Step "Preparing Credential Broker directory structure..."
-Wait-InstallConfirmation "Before: Preparing Credential Broker directory structure"
 
 Invoke-InstallOperation -Name "Create install root: $installRoot" -Action {
     New-Item -ItemType Directory -Path $installRoot -Force | Out-Null
@@ -270,7 +310,7 @@ Invoke-InstallOperation -Name "Wait for Credential Broker health: $HealthUrl" -A
     Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
 }
 
-$taskName = "\CredentialBroker"
+$taskName = "CredentialBroker"
 Invoke-InstallOperation -Name "Create Credential Broker scheduled task: $taskName" -Action {
     Register-CredentialBrokerTask -TaskName $taskName -BrokerExePath $brokerExePath
 }
@@ -289,4 +329,3 @@ foreach ($requiredFile in $requiredFiles) {
 }
 
 Write-Ok "Credential Broker directory structure prepared."
-Wait-InstallConfirmation "After: Credential Broker directory structure prepared"
