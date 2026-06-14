@@ -156,6 +156,22 @@ function Register-CredentialBrokerTask {
         Write-Info "task-registration: $Message"
     }
 
+    function Set-TaskSetting {
+        param(
+            [object]$Settings,
+            [string]$Name,
+            [object]$Value
+        )
+
+        try {
+            $Settings.$Name = $Value
+            Write-TaskRegistrationLog "Setting $Name=$Value"
+        }
+        catch {
+            Write-TaskRegistrationLog "Setting $Name skipped: $($_.Exception.Message)"
+        }
+    }
+
     if (Test-Path $taskLogPath) {
         Remove-Item -Path $taskLogPath -Force
     }
@@ -182,21 +198,21 @@ function Register-CredentialBrokerTask {
     $taskDefinition.Principal.LogonType = 3
     $taskDefinition.Principal.RunLevel = 0
 
-    $taskDefinition.Settings.MultipleInstances = 2
-    $taskDefinition.Settings.DisallowStartIfOnBatteries = $true
-    $taskDefinition.Settings.StopIfGoingOnBatteries = $true
-    $taskDefinition.Settings.AllowHardTerminate = $true
-    $taskDefinition.Settings.StartWhenAvailable = $false
-    $taskDefinition.Settings.RunOnlyIfNetworkAvailable = $false
-    $taskDefinition.Settings.AllowStartOnDemand = $true
-    $taskDefinition.Settings.Enabled = $true
-    $taskDefinition.Settings.Hidden = $false
-    $taskDefinition.Settings.RunOnlyIfIdle = $false
-    $taskDefinition.Settings.WakeToRun = $false
-    $taskDefinition.Settings.ExecutionTimeLimit = "PT72H"
-    $taskDefinition.Settings.Priority = 7
-    $taskDefinition.Settings.IdleSettings.StopOnIdleEnd = $true
-    $taskDefinition.Settings.IdleSettings.RestartOnIdle = $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "MultipleInstances" -Value 2
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "DisallowStartIfOnBatteries" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "StopIfGoingOnBatteries" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "AllowHardTerminate" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "StartWhenAvailable" -Value $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "RunOnlyIfNetworkAvailable" -Value $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "AllowStartOnDemand" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "Enabled" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "Hidden" -Value $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "RunOnlyIfIdle" -Value $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "WakeToRun" -Value $false
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "ExecutionTimeLimit" -Value "PT72H"
+    Set-TaskSetting -Settings $taskDefinition.Settings -Name "Priority" -Value 7
+    Set-TaskSetting -Settings $taskDefinition.Settings.IdleSettings -Name "StopOnIdleEnd" -Value $true
+    Set-TaskSetting -Settings $taskDefinition.Settings.IdleSettings -Name "RestartOnIdle" -Value $false
 
     $action = $taskDefinition.Actions.Create(0)
     $action.Path = "`"$BrokerExePath`""
