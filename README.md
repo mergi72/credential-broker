@@ -1,5 +1,9 @@
 # Credential Broker
 
+[![CI](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml/badge.svg)](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/Status-Beta-yellowgreen)](https://github.com/mergi72/credential-broker)
+[![Version](https://img.shields.io/badge/Version-v0.5.0--beta-blue)](https://github.com/mergi72/credential-broker/releases/tag/v0.5.0-beta)
+
 Credential Broker is a per-user local service that exposes controlled access to user-scoped credentials for trusted local applications and system services.
 
 It is not a LocalSystem or LocalService Windows Service. It must run in the interactive user's context so it can access that user's Windows Credential Manager. System services can use the broker as a controlled user-context credential boundary instead of reading user secrets directly.
