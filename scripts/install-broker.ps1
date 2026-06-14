@@ -15,6 +15,11 @@ $machineConfigDir = Join-Path $installRoot "config"
 $logDir = Join-Path $installRoot "logs"
 $userConfigDir = Join-Path $env:APPDATA "Credential Broker\config"
 $installLogPath = Join-Path $logDir "installer.log"
+$installIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$installUserSid = $installIdentity.User.Value
+$installUserName = $env:USERNAME
+$installUserDomain = $env:USERDOMAIN
+$installUser = if ([string]::IsNullOrWhiteSpace($installUserDomain)) { $installUserName } else { "$installUserDomain\$installUserName" }
 
 function Write-InstallLog {
     param(
@@ -148,7 +153,9 @@ function New-QuotedPowerShellString {
 function Register-CredentialBrokerTask {
     param(
         [string]$TaskName,
-        [string]$BrokerExePath
+        [string]$BrokerExePath,
+        [string]$InstallUser,
+        [string]$InstallUserSid
     )
 
     $taskCommand = "`"$BrokerExePath`" serve"
@@ -158,6 +165,7 @@ function Register-CredentialBrokerTask {
             "/TN", $TaskName,
             "/TR", $taskCommand,
             "/SC", "ONLOGON",
+            "/RU", $InstallUser,
             "/RL", "LIMITED",
             "/F"
         )
@@ -179,11 +187,16 @@ function Register-CredentialBrokerTask {
 
     Write-Info "Admin elevation is required to register scheduled task."
     $taskScriptPath = Join-Path $installRoot "register-credential-broker-task.ps1"
+    $taskLogPath = Join-Path $logDir "task-registration.log"
     $taskNameLiteral = New-QuotedPowerShellString -Value ($TaskName.TrimStart("\"))
+    $brokerExePathLiteral = New-QuotedPowerShellString -Value $BrokerExePath
+    $logDirLiteral = New-QuotedPowerShellString -Value $logDir
+    $installUserLiteral = New-QuotedPowerShellString -Value $InstallUser
+    $installUserSidLiteral = New-QuotedPowerShellString -Value $InstallUserSid
 
     $taskScript = @(
         '$ErrorActionPreference = "Stop"',
-        '$logDir = Join-Path $env:LOCALAPPDATA "Credential Broker\logs"',
+        '$logDir = ' + $logDirLiteral,
         '$logPath = Join-Path $logDir "task-registration.log"',
         'New-Item -ItemType Directory -Path $logDir -Force | Out-Null',
         'function Write-TaskLog {',
@@ -221,18 +234,22 @@ function Register-CredentialBrokerTask {
         'Write-TaskLog "USERDOMAIN=$env:USERDOMAIN"',
         'Write-TaskLog "LOCALAPPDATA=$env:LOCALAPPDATA"',
         '$taskName = ' + $taskNameLiteral,
-        '$exePath = Join-Path $env:LOCALAPPDATA "Credential Broker\credential-broker.exe"',
+        '$installUser = ' + $installUserLiteral,
+        '$installUserSid = ' + $installUserSidLiteral,
+        '$exePath = ' + $brokerExePathLiteral,
         '$taskCommand = "`"$exePath`" serve"',
         'Write-TaskLog "TaskName=$taskName"',
+        'Write-TaskLog "TargetInstallUser=$installUser"',
+        'Write-TaskLog "TargetInstallUserSid=$installUserSid"',
         'Write-TaskLog "ExePath=$exePath"',
         'Write-TaskLog "TaskCommand=$taskCommand"',
-        '$createExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Create", "/TN", $taskName, "/TR", $taskCommand, "/SC", "ONLOGON", "/RL", "LIMITED", "/F")',
+        '$createExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Create", "/TN", $taskName, "/TR", $taskCommand, "/SC", "ONLOGON", "/RU", $installUser, "/RL", "LIMITED", "/F")',
         'if ($createExitCode -ne 0) { exit $createExitCode }',
         '$queryExitCode = Invoke-LoggedProcess -FilePath "schtasks.exe" -Arguments @("/Query", "/TN", $taskName, "/V", "/FO", "LIST")',
         'if ($queryExitCode -ne 0) { exit $queryExitCode }',
         'Write-TaskLog "Scheduled task registration verified."'
     )
-    Set-Content -Path $taskScriptPath -Value $taskScript -Encoding UTF8
+    Set-Content -Path $taskScriptPath -Value $taskScript -Encoding Unicode
 
     Write-Info "Starting elevated task registration: $taskScriptPath"
     $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
@@ -240,6 +257,16 @@ function Register-CredentialBrokerTask {
         "-ExecutionPolicy", "Bypass",
         "-File", $taskScriptPath
     ) -Verb RunAs -Wait -PassThru
+
+    if (Test-Path $taskLogPath) {
+        Write-Info "Task registration log: $taskLogPath"
+        Get-Content -Path $taskLogPath -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Info "task-registration: $_"
+        }
+    }
+    else {
+        Write-Info "Task registration log was not created: $taskLogPath"
+    }
 
     if ($process.ExitCode -ne 0) {
         throw "Credential Broker elevated scheduled task registration failed with exit code $($process.ExitCode): $TaskName"
@@ -274,6 +301,8 @@ Write-Info "Machine config: $machineConfigDir"
 Write-Info "User config: $userConfigDir"
 Write-Info "Log directory: $logDir"
 Write-Info "Installer log: $installLogPath"
+Write-Info "Install user: $installUser"
+Write-Info "Install user SID: $installUserSid"
 
 Invoke-InstallOperation -Name "Replace user environment CREDENTIAL_BROKER_MACHINE_CONFIG_DIR=$machineConfigDir" -Action {
     [Environment]::SetEnvironmentVariable("CREDENTIAL_BROKER_MACHINE_CONFIG_DIR", $machineConfigDir, "User")
@@ -312,7 +341,7 @@ Invoke-InstallOperation -Name "Wait for Credential Broker health: $HealthUrl" -A
 
 $taskName = "CredentialBroker"
 Invoke-InstallOperation -Name "Create Credential Broker scheduled task: $taskName" -Action {
-    Register-CredentialBrokerTask -TaskName $taskName -BrokerExePath $brokerExePath
+    Register-CredentialBrokerTask -TaskName $taskName -BrokerExePath $brokerExePath -InstallUser $installUser -InstallUserSid $installUserSid
 }
 
 $requiredFiles = @(
