@@ -84,8 +84,30 @@ function Invoke-Schtasks {
     param([string[]]$Arguments)
 
     Write-Info ("schtasks.exe " + ($Arguments -join " "))
-    $output = & schtasks.exe @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
+    $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = "schtasks.exe"
+    foreach ($argument in $Arguments) {
+        [void]$startInfo.ArgumentList.Add($argument)
+    }
+    $startInfo.UseShellExecute = $false
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+    $startInfo.CreateNoWindow = $true
+
+    $process = [System.Diagnostics.Process]::Start($startInfo)
+    $stdout = $process.StandardOutput.ReadToEnd()
+    $stderr = $process.StandardError.ReadToEnd()
+    $process.WaitForExit()
+
+    $exitCode = $process.ExitCode
+    $output = @()
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+        $output += $stdout.TrimEnd() -split "`r?`n"
+    }
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        $output += $stderr.TrimEnd() -split "`r?`n"
+    }
+
     if ($output) {
         $output | ForEach-Object { Write-Info $_ }
     }
