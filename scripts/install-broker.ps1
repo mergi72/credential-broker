@@ -1,10 +1,14 @@
 param(
-    [string]$InstallRoot = "$env:LOCALAPPDATA\Credential Broker",
+    [string]$InstallRoot,
     [string]$HealthUrl = "http://127.0.0.1:8776/health",
     [int]$HealthTimeoutSeconds = 60
 )
 
 $ErrorActionPreference = "Stop"
+
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    $InstallRoot = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "Credential Broker"
+}
 
 $installRoot = if (Test-Path $InstallRoot) { (Resolve-Path $InstallRoot).Path } else { $InstallRoot }
 $machineConfigDir = Join-Path $installRoot "config"
