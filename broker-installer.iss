@@ -19,7 +19,6 @@ WizardStyle=modern
 Source: "artifacts\broker-installer-payload\credential-broker.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "artifacts\broker-installer-payload\install-broker.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "artifacts\broker-installer-payload\uninstall-broker.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "artifacts\broker-installer-payload\start-credential-broker.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "artifacts\broker-installer-payload\stop-credential-broker.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "artifacts\broker-installer-payload\config\broker.json"; DestDir: "{app}\config"; Flags: ignoreversion
 
