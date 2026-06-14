@@ -29,7 +29,7 @@ Name: "{app}\logs"
 Name: "{userappdata}\Credential Broker\config"
 
 [Run]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-broker.ps1"" -InstallRoot ""{app}"""; Flags: waituntilterminated logoutput
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\install-broker.ps1"" -InstallRoot ""{app}"""; Flags: waituntilterminated
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall-broker.ps1"" -InstallRoot ""{app}"""; Flags: waituntilterminated runhidden; RunOnceId: "CredentialBrokerUninstall"
