@@ -141,6 +141,66 @@ function Invoke-ExternalProcess {
     return $process.ExitCode
 }
 
+function Test-IsAdmin {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function New-QuotedPowerShellString {
+    param([string]$Value)
+    return "'" + ($Value -replace "'", "''") + "'"
+}
+
+function Register-CredentialBrokerTask {
+    param(
+        [string]$TaskName,
+        [string]$BrokerExePath
+    )
+
+    $taskCommand = "`"$BrokerExePath`" serve"
+    if (Test-IsAdmin) {
+        $exitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
+            "/Create",
+            "/TN", $TaskName,
+            "/TR", $taskCommand,
+            "/SC", "ONLOGON",
+            "/RL", "LIMITED",
+            "/F"
+        )
+
+        if ($exitCode -ne 0) {
+            throw "Credential Broker scheduled task registration failed: $TaskName"
+        }
+        return
+    }
+
+    Write-Info "Admin elevation is required to register scheduled task."
+    $taskScriptPath = Join-Path $installRoot "register-credential-broker-task.ps1"
+    $taskNameLiteral = New-QuotedPowerShellString -Value $TaskName
+    $taskCommandLiteral = New-QuotedPowerShellString -Value $taskCommand
+
+    $taskScript = @(
+        '$ErrorActionPreference = "Stop"',
+        '$taskName = ' + $taskNameLiteral,
+        '$taskCommand = ' + $taskCommandLiteral,
+        'schtasks.exe /Create /TN $taskName /TR $taskCommand /SC ONLOGON /RL LIMITED /F',
+        'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
+    )
+    Set-Content -Path $taskScriptPath -Value $taskScript -Encoding UTF8
+
+    Write-Info "Starting elevated task registration: $taskScriptPath"
+    $process = Start-Process -FilePath "powershell.exe" -ArgumentList @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $taskScriptPath
+    ) -Verb RunAs -Wait -PassThru
+
+    if ($process.ExitCode -ne 0) {
+        throw "Credential Broker elevated scheduled task registration failed with exit code $($process.ExitCode): $TaskName"
+    }
+}
+
 trap {
     Write-ErrorLog $_.Exception.Message
     if ($_.ScriptStackTrace) {
@@ -208,19 +268,7 @@ Invoke-InstallOperation -Name "Wait for Credential Broker health: $HealthUrl" -A
 
 $taskName = "\CredentialBroker"
 Invoke-InstallOperation -Name "Create Credential Broker scheduled task: $taskName" -Action {
-    $taskCommand = "`"$brokerExePath`" serve"
-    $exitCode = Invoke-ExternalProcess -FilePath "schtasks.exe" -Arguments @(
-        "/Create",
-        "/TN", $taskName,
-        "/TR", $taskCommand,
-        "/SC", "ONLOGON",
-        "/RL", "LIMITED",
-        "/F"
-    )
-
-    if ($exitCode -ne 0) {
-        throw "Credential Broker scheduled task registration failed: $taskName"
-    }
+    Register-CredentialBrokerTask -TaskName $taskName -BrokerExePath $brokerExePath
 }
 
 $requiredFiles = @(
