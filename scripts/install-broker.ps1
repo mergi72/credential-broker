@@ -118,6 +118,19 @@ else {
     Write-Ok "No old Credential Broker process found."
 }
 
+Write-Step "Stopping old Credential Broker development processes..."
+$oldDevProcesses = Get-CimInstance Win32_Process -Filter "name = 'python.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match "credential_broker\.cli\s+serve" }
+if ($oldDevProcesses) {
+    $oldDevProcesses | ForEach-Object {
+        Write-Info ("Stopping PID {0}: {1}" -f $_.ProcessId, $_.CommandLine)
+        [void]$_.Terminate()
+    }
+}
+else {
+    Write-Ok "No old Credential Broker development process found."
+}
+
 Write-Step "Removing old Credential Broker scheduled task..."
 $deleteResult = Invoke-Schtasks -Arguments @("/Delete", "/TN", $taskName, "/F")
 if ($deleteResult.ExitCode -eq 0) {
@@ -149,10 +162,7 @@ if ($createResult.ExitCode -ne 0) {
 Write-Ok "Scheduled task registered: $taskName"
 
 Write-Step "Starting Credential Broker once..."
-$runResult = Invoke-Schtasks -Arguments @("/Run", "/TN", $taskName)
-if ($runResult.ExitCode -ne 0) {
-    throw "Credential Broker scheduled task start failed: $taskName"
-}
+Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $installRoot -WindowStyle Hidden | Out-Null
 Write-Ok "Credential Broker start requested."
 
 Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
