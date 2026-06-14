@@ -8,12 +8,21 @@ $ErrorActionPreference = "Stop"
 
 function Write-InstallLog {
     param(
-        [ValidateSet("INFO", "STEP", "OK", "WARN")]
+        [ValidateSet("INFO", "STEP", "OK", "WARN", "ERROR")]
         [string]$Level,
         [string]$Message
     )
 
-    Write-Host ("[{0,-5}] {1}" -f $Level, $Message)
+    $line = "[{0}] [{1,-5}] {2}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $Level, $Message
+    Write-Host $line
+
+    if (-not [string]::IsNullOrWhiteSpace($script:InstallLogPath)) {
+        $logParent = Split-Path -Parent $script:InstallLogPath
+        if (-not (Test-Path $logParent)) {
+            New-Item -ItemType Directory -Path $logParent -Force | Out-Null
+        }
+        Add-Content -Path $script:InstallLogPath -Value $line -Encoding UTF8
+    }
 }
 
 function Write-Info {
@@ -34,6 +43,11 @@ function Write-Ok {
 function Write-Warn {
     param([string]$Message)
     Write-InstallLog -Level "WARN" -Message $Message
+}
+
+function Write-ErrorLog {
+    param([string]$Message)
+    Write-InstallLog -Level "ERROR" -Message $Message
 }
 
 function Wait-BrokerHealth {
@@ -88,6 +102,16 @@ $startupDir = [Environment]::GetFolderPath("Startup")
 $shortcutPath = Join-Path $startupDir "Credential Broker.lnk"
 $exePath = Join-Path $installRoot "credential-broker.exe"
 $taskName = "\CredentialBroker"
+$logDir = Join-Path $installRoot "logs"
+$script:InstallLogPath = Join-Path $logDir "installer.log"
+
+trap {
+    Write-ErrorLog $_.Exception.Message
+    if ($_.ScriptStackTrace) {
+        Write-ErrorLog $_.ScriptStackTrace
+    }
+    throw
+}
 
 Write-Step "Preparing Credential Broker local install..."
 
@@ -97,7 +121,8 @@ if (-not (Test-Path $exePath)) {
 
 New-Item -ItemType Directory -Path $machineConfigDir -Force | Out-Null
 New-Item -ItemType Directory -Path $userConfigDir -Force | Out-Null
-New-Item -ItemType Directory -Path (Join-Path $installRoot "logs") -Force | Out-Null
+New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+Write-Info "Installer log: $script:InstallLogPath"
 
 Write-Step "Setting user environment..."
 [Environment]::SetEnvironmentVariable("CREDENTIAL_BROKER_MACHINE_CONFIG_DIR", $machineConfigDir, "User")
@@ -166,6 +191,15 @@ Start-Process -FilePath $exePath -ArgumentList @("serve") -WorkingDirectory $ins
 Write-Ok "Credential Broker start requested."
 
 Wait-BrokerHealth -Url $HealthUrl -TimeoutSeconds $HealthTimeoutSeconds
+$allBrokerProcesses = Get-CimInstance Win32_Process -Filter "name = 'credential-broker.exe'" -ErrorAction SilentlyContinue
+if ($allBrokerProcesses) {
+    $allBrokerProcesses | ForEach-Object {
+        Write-Info ("Running broker process PID {0}: {1}" -f $_.ProcessId, $_.ExecutablePath)
+    }
+}
+else {
+    Write-Warn "No credential-broker.exe process is running after health wait."
+}
 $runningInstalledBroker = Get-CimInstance Win32_Process -Filter "name = 'credential-broker.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.ExecutablePath -ieq $exePath }
 if (-not $runningInstalledBroker) {
