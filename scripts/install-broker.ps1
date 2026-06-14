@@ -177,13 +177,13 @@ function Register-CredentialBrokerTask {
 
     Write-Info "Admin elevation is required to register scheduled task."
     $taskScriptPath = Join-Path $installRoot "register-credential-broker-task.ps1"
-    $taskNameLiteral = New-QuotedPowerShellString -Value $TaskName
-    $taskCommandLiteral = New-QuotedPowerShellString -Value $taskCommand
+    $taskNameLiteral = New-QuotedPowerShellString -Value ($TaskName.TrimStart("\"))
 
     $taskScript = @(
         '$ErrorActionPreference = "Stop"',
         '$taskName = ' + $taskNameLiteral,
-        '$taskCommand = ' + $taskCommandLiteral,
+        '$exePath = Join-Path $env:LOCALAPPDATA "Credential Broker\credential-broker.exe"',
+        '$taskCommand = "`"$exePath`" serve"',
         'schtasks.exe /Create /TN $taskName /TR $taskCommand /SC ONLOGON /RL LIMITED /F',
         'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }'
     )
