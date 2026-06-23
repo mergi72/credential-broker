@@ -1,7 +1,7 @@
 # Credential Broker
 
 [![CI](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml/badge.svg)](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/Status-Beta-yellowgreen)](https://github.com/mergi72/credential-broker)
+[![Status](https://img.shields.io/badge/Status-1.0-brightgreen)](https://github.com/mergi72/credential-broker)
 [![Broker](https://img.shields.io/github/v/release/mergi72/credential-broker?include_prereleases&label=Broker&color=blue)](https://github.com/mergi72/credential-broker/releases/latest)
 [![Setup](https://img.shields.io/github/v/release/mergi72/credential-broker?include_prereleases&label=Setup&color=blueviolet)](https://github.com/mergi72/credential-broker/releases/latest)
 
@@ -161,5 +161,5 @@ Installed files:
 %LOCALAPPDATA%\Credential Broker\logs\
 ```
 
-It creates a user Startup shortcut named `Credential Broker` and starts the broker in the interactive user context.
+It creates a per-user Scheduled Task named `CredentialBroker` and starts the broker in the interactive user context.
 
