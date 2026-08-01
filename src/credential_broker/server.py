@@ -7,6 +7,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from credential_broker import __version__
 from credential_broker.broker import resolve_credentials
 from credential_broker.models import CredentialRequest
 
@@ -93,6 +94,10 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
+def health_payload() -> dict[str, Any]:
+    return {"ok": True, "service": "credential-broker", "version": __version__}
+
+
 def _json_response(status: int, payload: dict[str, Any]) -> tuple[int, bytes]:
     return status, json.dumps(_json_safe(payload), ensure_ascii=False, indent=2).encode("utf-8")
 
@@ -160,7 +165,7 @@ class CredentialBrokerHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/health":
-            self._send_json(200, {"ok": True, "service": "credential-broker"})
+            self._send_json(200, health_payload())
             return
         self._send_json(404, {"ok": False, "message": "Not found."})
 

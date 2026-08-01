@@ -9,6 +9,14 @@ from credential_broker.windows_credential_manager import WindowsCredential
 pytestmark = pytest.mark.unit
 
 
+
+def test_health_payload_includes_version() -> None:
+    payload = server_module.health_payload()
+
+    assert payload["ok"] is True
+    assert payload["service"] == "credential-broker"
+    assert payload["version"] == "1.0.0"
+
 def test_resolve_json_request_returns_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         server_module,
