@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml/badge.svg)](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-1.0-brightgreen)](https://github.com/mergi72/credential-broker)
-[![Broker](https://img.shields.io/badge/Broker-v1.0.0-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.0.0)
-[![Setup](https://img.shields.io/badge/Setup-v1.0.0-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.0.0)
+[![Broker](https://img.shields.io/badge/Broker-v1.1.0-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.0)
+[![Setup](https://img.shields.io/badge/Setup-v1.1.0-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.0)
 
 Credential Broker is a per-user local service that exposes controlled access to user-scoped credentials for trusted local applications and system services.
 
@@ -61,6 +61,20 @@ http://127.0.0.1:8776
 ```
 
 The broker is localhost-only by design. It refuses to bind to non-loopback hosts such as `0.0.0.0`, `::`, or LAN IP addresses. Allowed bind hosts are `127.0.0.1`, `localhost`, and `::1`.
+
+Operational and optional debug logs use the same configuration contract as VFS Provider Bridge:
+
+```json
+"debug": {
+  "enable": true,
+  "path": "%APPDATA%\\Credential Broker\\logs"
+}
+```
+
+`broker.log` contains normal operational messages. Setting `enable` to `true` additionally creates
+`broker-debug.log` with DEBUG-level messages. Credential secrets are masked before request validation errors are logged.
+Every HTTP request records its method, path, status, loopback client and caller identity. VFS components may identify
+themselves with the optional `X-VFS-Component` request header; other callers are identified by a sanitized `User-Agent`.
 
 Endpoints:
 

@@ -22,6 +22,7 @@ def test_load_config_returns_defaults_when_machine_config_missing(monkeypatch: p
 
     assert server_host(config) == "127.0.0.1"
     assert server_port(config) == 8776
+    assert config["debug"] == {"enable": False, "path": r"%APPDATA%\Credential Broker\logs"}
 
 
 def test_load_config_merges_user_local_over_machine(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:

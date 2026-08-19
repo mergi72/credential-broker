@@ -15,7 +15,16 @@ def test_health_payload_includes_version() -> None:
 
     assert payload["ok"] is True
     assert payload["service"] == "credential-broker"
-    assert payload["version"] == "1.0.0"
+    assert payload["version"] == "1.1.0"
+
+
+def test_caller_identity_prefers_component_header_and_sanitizes_log_input() -> None:
+    assert server_module.caller_identity({"X-VFS-Component": "Demi\nERROR injected"}) == "Demi_ERROR_injected"
+
+
+def test_caller_identity_falls_back_to_user_agent() -> None:
+    assert server_module.caller_identity({"User-Agent": "python-httpx/0.28.1"}) == "python-httpx/0.28.1"
+    assert server_module.caller_identity({}) == "unknown"
 
 def test_resolve_json_request_returns_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
@@ -129,18 +138,18 @@ def test_sanitize_request_for_logging_masks_nested_secrets() -> None:
     assert sanitized["auth"]["nested"]["apiKey"] == "***"
 
 
-def test_invalid_request_log_masks_secrets(capsys: pytest.CaptureFixture[str]) -> None:
-    status, payload = server_module.resolve_json_request(
-        b'{"auth":{"mode":"credentials","username":"user@example.com","password":"secret","token":"token-value"}}'
-    )
+def test_invalid_request_log_masks_secrets(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level("WARNING", logger="credential_broker.server"):
+        status, payload = server_module.resolve_json_request(
+            b'{"auth":{"mode":"credentials","username":"user@example.com","password":"secret","token":"token-value"}}'
+        )
 
-    captured = capsys.readouterr()
     assert status == 400
     assert payload["ok"] is False
-    assert "secret" not in captured.out
-    assert "token-value" not in captured.out
-    assert '"password": "***"' in captured.out
-    assert '"token": "***"' in captured.out
+    assert "secret" not in caplog.text
+    assert "token-value" not in caplog.text
+    assert '"password": "***"' in caplog.text
+    assert '"token": "***"' in caplog.text
 
 class _KeyboardInterruptServer:
     def __init__(self) -> None:
@@ -153,12 +162,12 @@ class _KeyboardInterruptServer:
         self.closed = True
 
 
-def test_serve_until_stopped_handles_keyboard_interrupt(capsys: pytest.CaptureFixture[str]) -> None:
+def test_serve_until_stopped_handles_keyboard_interrupt(caplog: pytest.LogCaptureFixture) -> None:
     server = _KeyboardInterruptServer()
 
-    server_module._serve_until_stopped(server)  # type: ignore[arg-type]
+    with caplog.at_level("INFO", logger="credential_broker.server"):
+        server_module._serve_until_stopped(server)  # type: ignore[arg-type]
 
-    captured = capsys.readouterr()
     assert server.closed is True
-    assert "Credential Broker stop requested" in captured.out
-    assert "Credential Broker stopped" in captured.out
+    assert "Credential Broker stop requested" in caplog.text
+    assert "Credential Broker stopped" in caplog.text

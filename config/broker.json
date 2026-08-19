@@ -8,5 +8,9 @@
   },
   "logging": {
     "level": "info"
+  },
+  "debug": {
+    "enable": true,
+    "path": "%APPDATA%\\Credential Broker\\logs"
   }
 }

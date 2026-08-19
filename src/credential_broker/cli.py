@@ -6,6 +6,7 @@ import sys
 
 from credential_broker.broker import resolve_credentials
 from credential_broker.config_loader import load_config, server_host, server_port
+from credential_broker.logging_config import configure_logging
 from credential_broker.models import CredentialRequest
 from credential_broker.server import run_server
 
@@ -29,9 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     serve_parser.add_argument("--port", type=int, default=None, help="Bind port. Overrides broker.json server.port.")
 
     args = parser.parse_args(argv)
+    config = load_config()
+    configure_logging(config)
 
     if args.command == "serve":
-        config = load_config()
         host = args.host or server_host(config)
         port = args.port if args.port is not None else server_port(config)
         run_server(host=host, port=port)

@@ -17,6 +17,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "server": {"host": "127.0.0.1", "port": 8776},
     "credentials": {"backend": "windows"},
     "logging": {"level": "info"},
+    "debug": {"enable": False, "path": r"%APPDATA%\Credential Broker\logs"},
 }
 
 

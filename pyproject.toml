@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "credential-broker"
-version = "1.0.0"
+version = "1.1.0"
 description = "Generic user-context credential broker for Windows Credential Manager and service callers."
 readme = "README.md"
 requires-python = ">=3.11"

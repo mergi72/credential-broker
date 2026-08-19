@@ -40,6 +40,25 @@ def test_resolve_windows_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.auth.credential_id == "tc-wfx/bridge"
 
 
+def test_resolve_logs_main_operation_without_secret(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    monkeypatch.setattr(
+        broker_module,
+        "read_windows_credential",
+        lambda target: WindowsCredential(target=target, username="user@example.com", password="secret"),
+    )
+    request = CredentialRequest.model_validate({"auth": {"mode": "windows", "target": "openai/eli", "required": True}})
+
+    with caplog.at_level("INFO", logger="credential_broker.broker"):
+        response = broker_module.resolve_credentials(request)
+
+    assert response.ok is True
+    assert "credential_resolve_start mode=windows credential_id=openai/eli" in caplog.text
+    assert "credential_backend_done backend=windows credential_id=openai/eli status=ok" in caplog.text
+    assert "credential_resolve_done mode=windows credential_id=openai/eli ok=True" in caplog.text
+    assert "secret" not in caplog.text
+    assert "user@example.com" not in caplog.text
+
+
 def test_required_missing_windows_credential_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     def missing(_target: str):
         raise CredentialNotFoundError("missing")
