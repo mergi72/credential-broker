@@ -7,6 +7,7 @@ import re
 from collections.abc import Mapping
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -25,6 +26,7 @@ SENSITIVE_LOG_KEYS = {"password", "passwd", "secret", "token", "api_key", "apike
 MASKED_LOG_VALUE = "***"
 LOGGER = logging.getLogger("credential_broker.server")
 CALLER_HEADER = "X-VFS-Component"
+CORRELATION_HEADER = "X-VFS-Correlation-ID"
 _SAFE_CALLER_PATTERN = re.compile(r"[^A-Za-z0-9._/-]+")
 
 
@@ -66,6 +68,16 @@ def caller_identity(headers: Mapping[str, str]) -> str:
     value = headers.get(CALLER_HEADER) or headers.get("User-Agent") or "unknown"
     normalized = _SAFE_CALLER_PATTERN.sub("_", value.strip())[:80]
     return normalized or "unknown"
+
+
+def correlation_identity(headers: Mapping[str, str]) -> str:
+    value = headers.get(CORRELATION_HEADER)
+    if not value:
+        return "-"
+    try:
+        return str(UUID(value.strip()))
+    except (ValueError, AttributeError):
+        return "-"
 
 
 class UnsafeBindHostError(ValueError):
@@ -204,6 +216,7 @@ class CredentialBrokerHandler(BaseHTTPRequestHandler):
     def _log_request_event(self, status: int, **fields: Any) -> None:
         parts = [
             "broker_request",
+            f"correlation_id={correlation_identity(self.headers)}",
             f"method={self.command}",
             f"path={self.path}",
             f"status={status}",

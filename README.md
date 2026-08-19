@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml/badge.svg)](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-1.0-brightgreen)](https://github.com/mergi72/credential-broker)
-[![Broker](https://img.shields.io/badge/Broker-v1.1.0-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.0)
-[![Setup](https://img.shields.io/badge/Setup-v1.1.0-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.0)
+[![Broker](https://img.shields.io/badge/Broker-v1.1.1-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.1)
+[![Setup](https://img.shields.io/badge/Setup-v1.1.1-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.1)
 
 Credential Broker is a per-user local service that exposes controlled access to user-scoped credentials for trusted local applications and system services.
 

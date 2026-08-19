@@ -15,7 +15,7 @@ def test_health_payload_includes_version() -> None:
 
     assert payload["ok"] is True
     assert payload["service"] == "credential-broker"
-    assert payload["version"] == "1.1.0"
+    assert payload["version"] == "1.1.1"
 
 
 def test_caller_identity_prefers_component_header_and_sanitizes_log_input() -> None:
@@ -25,6 +25,13 @@ def test_caller_identity_prefers_component_header_and_sanitizes_log_input() -> N
 def test_caller_identity_falls_back_to_user_agent() -> None:
     assert server_module.caller_identity({"User-Agent": "python-httpx/0.28.1"}) == "python-httpx/0.28.1"
     assert server_module.caller_identity({}) == "unknown"
+
+
+def test_correlation_identity_accepts_only_uuid() -> None:
+    value = "123e4567-e89b-12d3-a456-426614174000"
+    assert server_module.correlation_identity({"X-VFS-Correlation-ID": value}) == value
+    assert server_module.correlation_identity({"X-VFS-Correlation-ID": "bad\nERROR"}) == "-"
+    assert server_module.correlation_identity({}) == "-"
 
 def test_resolve_json_request_returns_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
