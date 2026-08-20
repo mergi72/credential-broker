@@ -186,7 +186,7 @@ def resolve_json_request(raw_body: bytes) -> tuple[int, dict[str, Any]]:
 
 
 class CredentialBrokerHandler(BaseHTTPRequestHandler):
-    server_version = "CredentialBroker/1.1.0"
+    server_version = f"CredentialBroker/{__version__}"
 
     def do_GET(self) -> None:  # noqa: N802 - stdlib handler API
         if self.path == "/health":

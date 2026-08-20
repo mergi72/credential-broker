@@ -43,3 +43,34 @@ def test_load_config_merges_user_local_over_machine(monkeypatch: pytest.MonkeyPa
     assert server_host(config) == "127.0.0.1"
     assert server_port(config) == 8766
     assert config["logging"]["level"] == "info"
+
+
+def test_load_config_accepts_supported_windows_backend(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    machine_dir = tmp_path / "machine"
+    user_dir = tmp_path / "user"
+    machine_dir.mkdir()
+    user_dir.mkdir()
+    (machine_dir / "broker.json").write_text(
+        json.dumps({"credentials": {"backend": "windows"}}), encoding="utf-8"
+    )
+    monkeypatch.setenv("CREDENTIAL_BROKER_MACHINE_CONFIG_DIR", str(machine_dir))
+    monkeypatch.setenv("CREDENTIAL_BROKER_USER_CONFIG_DIR", str(user_dir))
+
+    config = load_config()
+
+    assert config["credentials"]["backend"] == "windows"
+
+
+def test_load_config_rejects_unsupported_backend(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    machine_dir = tmp_path / "machine"
+    user_dir = tmp_path / "user"
+    machine_dir.mkdir()
+    user_dir.mkdir()
+    (machine_dir / "broker.json").write_text(
+        json.dumps({"credentials": {"backend": "unix"}}), encoding="utf-8"
+    )
+    monkeypatch.setenv("CREDENTIAL_BROKER_MACHINE_CONFIG_DIR", str(machine_dir))
+    monkeypatch.setenv("CREDENTIAL_BROKER_USER_CONFIG_DIR", str(user_dir))
+
+    with pytest.raises(ValueError, match="credentials.backend"):
+        load_config()

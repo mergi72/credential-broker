@@ -19,6 +19,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "logging": {"level": "info"},
     "debug": {"enable": False, "path": r"%APPDATA%\Credential Broker\logs"},
 }
+SUPPORTED_CREDENTIAL_BACKENDS = {"windows"}
 
 
 def _default_machine_config_dir() -> Path:
@@ -60,14 +61,25 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _validate_config(config: Mapping[str, Any]) -> None:
+    credentials = config.get("credentials")
+    backend = credentials.get("backend") if isinstance(credentials, Mapping) else None
+    if not isinstance(backend, str) or backend.strip().lower() not in SUPPORTED_CREDENTIAL_BACKENDS:
+        supported = ", ".join(sorted(SUPPORTED_CREDENTIAL_BACKENDS))
+        raise ValueError(f"credentials.backend must be one of: {supported}.")
+
+
 def load_config() -> dict[str, Any]:
     machine_path = machine_config_dir() / CONFIG_FILE_NAME
     user_path = user_config_dir() / USER_CONFIG_FILE_NAME
     if not machine_path.exists():
-        return dict(DEFAULT_CONFIG)
+        config = dict(DEFAULT_CONFIG)
+        _validate_config(config)
+        return config
     config = deep_merge(DEFAULT_CONFIG, _read_json(machine_path))
     if user_path.exists():
         config = deep_merge(config, _read_json(user_path))
+    _validate_config(config)
     return config
 
 

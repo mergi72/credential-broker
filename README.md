@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml/badge.svg)](https://github.com/mergi72/credential-broker/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/Status-1.0-brightgreen)](https://github.com/mergi72/credential-broker)
-[![Broker](https://img.shields.io/badge/Broker-v1.1.1-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.1)
-[![Setup](https://img.shields.io/badge/Setup-v1.1.1-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.1)
+[![Broker](https://img.shields.io/badge/Broker-v1.1.2-blue)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.2)
+[![Setup](https://img.shields.io/badge/Setup-v1.1.2-blueviolet)](https://github.com/mergi72/credential-broker/releases/tag/v1.1.2)
 
 Credential Broker is a per-user local service that exposes controlled access to user-scoped credentials for trusted local applications and system services.
 
@@ -61,6 +61,10 @@ http://127.0.0.1:8776
 ```
 
 The broker is localhost-only by design. It refuses to bind to non-loopback hosts such as `0.0.0.0`, `::`, or LAN IP addresses. Allowed bind hosts are `127.0.0.1`, `localhost`, and `::1`.
+
+The HTTP API currently trusts local processes running in the interactive user's trusted environment. Loopback binding prevents network access, but it does not authenticate a Windows user or process. Do not expose the Broker across user or service-identity boundaries until caller authentication and credential-target policy are implemented.
+
+The only currently supported credential backend is `windows`. Other backend names are rejected during configuration loading; the setting is retained as the extension point for future local credential providers.
 
 Operational and optional debug logs use the same configuration contract as VFS Provider Bridge:
 

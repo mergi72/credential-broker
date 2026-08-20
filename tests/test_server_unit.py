@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 import credential_broker.server as server_module
+from credential_broker import __version__
 from credential_broker.windows_credential_manager import WindowsCredential
 
 
@@ -15,7 +16,11 @@ def test_health_payload_includes_version() -> None:
 
     assert payload["ok"] is True
     assert payload["service"] == "credential-broker"
-    assert payload["version"] == "1.1.1"
+    assert payload["version"] == __version__
+
+
+def test_http_server_version_tracks_package_version() -> None:
+    assert server_module.CredentialBrokerHandler.server_version == f"CredentialBroker/{__version__}"
 
 
 def test_caller_identity_prefers_component_header_and_sanitizes_log_input() -> None:
